@@ -100,6 +100,17 @@ styled = [maia.choose_styled(chess.Board(), cfg["maia"], cfg["style"], 2000)[0] 
 assert all(m in chess.Board().legal_moves for m in styled)
 print("style tests ok:", sorted(set(m.uci() for m in styled)), flush=True)
 
+# Timing tests (3+0 game): obvious < hard on average, book fast, time trouble fast.
+from bot.timing import think_seconds
+import random as _r, statistics as _st
+T = cfg["timing"]
+obvious = _st.mean(think_seconds(150000, 0, 30, 0.95, 20, False, T, _r) for _ in range(300))
+hard = _st.mean(think_seconds(150000, 0, 30, 0.25, 20, False, T, _r) for _ in range(300))
+book = max(think_seconds(180000, 0, 2, 1.0, 20, True, T, _r) for _ in range(300))
+panic = max(think_seconds(8000, 0, 60, 0.2, 20, False, T, _r) for _ in range(300))
+print(f"timing: obvious {obvious:.2f}s, hard {hard:.2f}s, book max {book:.2f}s, <10s max {panic:.2f}s", flush=True)
+assert obvious < hard and book <= 0.9 and panic <= 0.96
+
 bot = Bot(settings, api, maia, guard, "me", Book(path="/nonexistent"))
 
 def ch(cid, limit=180, inc=0, variant="standard", rated=True, title=None):

@@ -9,6 +9,7 @@ from bot.book import Book
 from bot.engine import Guard, Maia
 from bot.lichess import Lichess
 from bot.settings import Settings
+from bot.timing import think_seconds
 
 STANDARD_FEN = chess.STARTING_FEN
 
@@ -141,7 +142,15 @@ class Bot:
                             board.push_uci(m)
                         if board.turn == color and len(moves) != sent_ply and not board.is_game_over():
                             t0 = time.time()
-                            move, note, opening = self.pick_move(gid, board, state, color, opp_rating)
+                            move, note, opening, top_prob = self.pick_move(gid, board, state, color,
+                                                                           opp_rating)
+                            mine = "w" if color == chess.WHITE else "b"
+                            think = think_seconds(state.get(f"{mine}time"), state.get(f"{mine}inc"),
+                                                  len(moves), top_prob, board.legal_moves.count(),
+                                                  opening is not None, self.cfg.get("timing", {}))
+                            wait = think - (time.time() - t0)
+                            if wait > 0:
+                                time.sleep(wait)
                             if note:
                                 vetoes += 1
                             if opening:
@@ -166,23 +175,24 @@ class Bot:
             log(f"[{gid}] game thread ended")
 
     def pick_move(self, gid, board, state, color, opp_rating):
-        """Return (move, guard note or None, opening name if the move came from the book)."""
+        """Return (move, guard note or None, opening name if from the book, Maia's top probability)."""
         move, opening = self.book.pick(gid, board, color, self.cfg)
         if move:
-            return move, None, opening
+            return move, None, opening, 1.0
         mcfg, gcfg, scfg = self.cfg["maia"], self.cfg.get("guard", {}), self.cfg.get("style", {})
-        move = None
+        move, top = None, []
         if scfg.get("enabled"):
-            move, _, _ = self.maia.choose_styled(board, mcfg, scfg, opp_rating)
+            move, top, _ = self.maia.choose_styled(board, mcfg, scfg, opp_rating)
         if move is None:
-            move, _, _ = self.maia.choose(board, mcfg, opp_rating)
+            move, top, _ = self.maia.choose(board, mcfg, opp_rating)
+        top_prob = max((c["policy"] for c in top), default=0.5)
         clock = state.get("wtime" if color == chess.WHITE else "btime")
         low_clock = clock is not None and clock < gcfg.get("min_clock_seconds", 15) * 1000
         if not gcfg.get("enabled") or low_clock or self.guard is None:
-            return move, None, None
+            return move, None, None, top_prob
         move, note = self.guard.check(board, move, gcfg,
                                       lambda: self.maia.choose(board, mcfg, opp_rating, candidates=8)[1])
-        return move, note, None
+        return move, note, None, top_prob
 
     def finish(self, gid, state, color, opp, opp_rating, vetoes=0, opening=None, book_moves=0):
         winner = state.get("winner")

@@ -12,6 +12,10 @@ style:                 # consistent playing style (one "person" across games)
   strength: 1.5        # 0 = pure Maia, 1 = noticeable, 2+ = very consistent / predictable
   candidates: 8        # how many of Maia's most likely moves the style chooses between
 
+timing:                # human-like thinking time
+  enabled: true        # fast in the opening and for obvious moves, longer in hard positions
+  speed: 1.0           # 1.5 = slower and more deliberate, 0.7 = faster
+
 guard:                 # Stockfish blunder guard. Maia still chooses every move.
   enabled: true        # true = ON, false = OFF (applies mid-game within ~30 s)
   playable_cp: -150    # only check moves when the position is at least this good for the bot
