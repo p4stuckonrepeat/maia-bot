@@ -38,6 +38,9 @@ guard:                 # Stockfish blunder guard. Maia still chooses every move.
   lost_cp: -500        # veto a move only if it leaves the bot at this evaluation or worse...
   min_drop_cp: 300     # ...and it costs at least this much (winning -> equal is allowed)
   depth: 14            # Stockfish search depth for the check
+  replace_with: softer_mistake  # softer_mistake = play a smaller mistake instead; maia_next = Maia's next safe move
+  softer_drop_cp: 300  # the smaller mistake aims ~3 pawns below the position before...
+  softer_target_cp: 0  # ...but at most "equal" (0), so a winning position becomes about equal
   min_clock_seconds: 15  # skip the check when the bot's clock is lower than this
 
 challenges:

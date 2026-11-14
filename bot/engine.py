@@ -96,15 +96,26 @@ class Guard:
             after = self.after(board, move, color, depth)
             if after > gcfg["lost_cp"] or before - after < gcfg["min_drop_cp"]:
                 return move, None
-            # Blunder: try Maia's own alternatives in order of how likely Maia thinks they are.
-            for cand in candidates_fn():
-                m = cand["move"]
-                if m == move:
-                    continue
-                a = self.after(board, m, color, depth)
-                if a > gcfg["lost_cp"]:
-                    return m, (f"vetoed {board.san(move)} ({before:+}->{after:+}), "
-                               f"played Maia's {board.san(m)} ({a:+})")
+            # Blunder: replace it with one of Maia's own alternatives.
+            cands = [c["move"] for c in candidates_fn() if c["move"] != move]
+            if gcfg.get("replace_with", "softer_mistake") == "softer_mistake":
+                # A smaller mistake instead of the blunder: aim for a worse-but-playable position
+                # (e.g. winning -> roughly equal), not for the best move.
+                target = min(before - float(gcfg.get("softer_drop_cp", 300)),
+                             float(gcfg.get("softer_target_cp", 0)))
+                target = max(target, gcfg["lost_cp"] + 150)
+                scored = [(m, self.after(board, m, color, depth)) for m in cands]
+                ok = [(m, a) for m, a in scored if a > gcfg["lost_cp"]]
+                if ok:
+                    m, a = min(ok, key=lambda x: abs(x[1] - target))
+                    return m, (f"vetoed {board.san(move)} ({before:+}->{after:+}), played a smaller "
+                               f"mistake: Maia's {board.san(m)} ({a:+})")
+            else:
+                for m in cands:
+                    a = self.after(board, m, color, depth)
+                    if a > gcfg["lost_cp"]:
+                        return m, (f"vetoed {board.san(move)} ({before:+}->{after:+}), "
+                                   f"played Maia's {board.san(m)} ({a:+})")
             best = self.sf.play(board, chess.engine.Limit(depth=depth)).move
             return best, (f"vetoed {board.san(move)} ({before:+}->{after:+}), "
                           f"no safe Maia move, played Stockfish's {board.san(best)}")
