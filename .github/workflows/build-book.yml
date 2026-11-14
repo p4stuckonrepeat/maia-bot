@@ -9,9 +9,23 @@ on:
 permissions:
   contents: write
 jobs:
+  list:
+    runs-on: ubuntu-latest
+    outputs:
+      openings: ${{ steps.l.outputs.openings }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: l
+        run: |
+          python3 -c "import yaml,json;c=yaml.safe_load(open('config.yml'))['openings'];print('openings='+json.dumps([n for s in ('white','black') for n in c[s]]))" >> "$GITHUB_OUTPUT"
   build:
+    needs: list
     runs-on: ubuntu-latest
     timeout-minutes: 345
+    strategy:
+      fail-fast: false
+      matrix:
+        opening: ${{ fromJson(needs.list.outputs.openings) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -21,11 +35,26 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y stockfish
           pip install -r requirements.txt
-      - name: Build book
+      - name: Build ${{ matrix.opening }}
         env:
           LICHESS_TOKEN: ${{ secrets.LICHESS_TOKEN }}
           BOOK_BUDGET_SCALE: ${{ inputs.test && '0.01' || '1' }}
-        run: python -u -m tools.build_book
+        run: python -u -m tools.build_book --only ${{ matrix.opening }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: part-${{ matrix.opening }}
+          path: part-${{ matrix.opening }}.json
+  merge:
+    needs: build
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: parts
+          merge-multiple: true
+      - run: pip install -r requirements.txt && python -m tools.build_book --merge parts/*.json
       - name: Save book.json to the repo
         if: ${{ !inputs.test }}
         run: |

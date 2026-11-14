@@ -24,7 +24,7 @@ MIN_MOVE_SHARE = 0.04    # opponent replies below this share of games are left t
 OUR_MIN_SHARE = 0.10     # our candidates must be >= 10% as popular as the top choice
 MAX_LOSS_CP = 40         # ...and within 0.4 pawns of the best candidate (Stockfish)
 MAX_PLY = 30
-DEPTH = 16
+DEPTH = 14
 TIME_LIMIT = float(os.environ.get("BOOK_TIME_LIMIT_MIN", "320")) * 60
 
 session = requests.Session()
@@ -162,7 +162,27 @@ def main_line(book, color):
     return " ".join(sans)
 
 
+def merge(paths):
+    """Combine per-opening parts into book.json and write the summary table."""
+    out = {"source": "lichess.org games, 2200+ rated, blitz/rapid/classical",
+           "built": time.strftime("%Y-%m-%d"), "openings": {}}
+    rows = []
+    for p in sorted(paths):
+        part = json.load(open(p))
+        out["openings"].update(part["openings"])
+        rows += part.get("summary", [])
+    json.dump(out, open("book.json", "w"), separators=(",", ":"))
+    text = "\n".join(["## Opening book", "", "| Opening | Positions | Deepest ply | Main line |",
+                      "|---|---|---|---|"] + rows)
+    print(text)
+    if os.environ.get("GITHUB_STEP_SUMMARY"):
+        open(os.environ["GITHUB_STEP_SUMMARY"], "a").write(text + "\n")
+
+
 def main():
+    if len(sys.argv) > 2 and sys.argv[1] == "--merge":
+        return merge(sys.argv[2:])
+    only = sys.argv[2] if len(sys.argv) > 2 and sys.argv[1] == "--only" else None
     cfg = yaml.safe_load(open("config.yml"))["openings"]
     sf = chess.engine.SimpleEngine.popen_uci("/usr/games/stockfish")
     sf.configure({"Threads": os.cpu_count(), "Hash": 512})
@@ -170,7 +190,7 @@ def main():
            "built": time.strftime("%Y-%m-%d"), "openings": {}}
     summary = ["## Opening book", "", "| Opening | Positions | Deepest ply | Main line |", "|---|---|---|---|"]
     # main openings first so they always get built even if time runs short
-    jobs = [(n, s, c) for c in ("white", "black") for n, s in cfg[c].items()]
+    jobs = [(n, s, c) for c in ("white", "black") for n, s in cfg[c].items() if only in (None, n)]
     jobs.sort(key=lambda j: -j[1]["weight"])
     for name, spec, color in jobs:
         col = chess.WHITE if color == "white" else chess.BLACK
@@ -178,6 +198,11 @@ def main():
         out["openings"][name] = {"color": color, "positions": book}
         summary.append(f"| {name} | {len(book)} | {deepest} | {main_line(book, col)} |")
     sf.quit()
+    if only:
+        out["summary"] = summary[4:]
+        json.dump(out, open(f"part-{only}.json", "w"), separators=(",", ":"))
+        print(summary[-1], f"| requests {requests_made}, {(time.time() - start) / 60:.0f} min")
+        return
     json.dump(out, open("book.json", "w"), separators=(",", ":"))
     summary.append(f"\nExplorer requests: {requests_made}, time {(time.time() - start) / 60:.0f} min")
     text = "\n".join(summary)
