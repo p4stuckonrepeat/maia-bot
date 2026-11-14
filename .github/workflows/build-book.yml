@@ -6,10 +6,6 @@ on:
         description: "Quick test run (tiny book, not saved)"
         type: boolean
         default: false
-      auth:
-        description: "Send the Lichess token to the explorer"
-        type: boolean
-        default: false
 permissions:
   contents: write
 jobs:
@@ -21,13 +17,14 @@ jobs:
       - uses: actions/checkout@v4
       - id: l
         run: |
-          python3 -c "import yaml,json;c=yaml.safe_load(open('config.yml'))['openings'];print('openings='+json.dumps([n for s in ('white','black') for n in c[s]]))" >> "$GITHUB_OUTPUT"
+          python3 -c "import yaml,json;c=yaml.safe_load(open('config.yml'))['openings'];print('openings='+json.dumps(sorted([n for s in ('white','black') for n in c[s]], key=lambda n: -(c['white'].get(n) or c['black'].get(n))['weight'])))" >> "$GITHUB_OUTPUT"
   build:
     needs: list
     runs-on: ubuntu-latest
     timeout-minutes: 345
     strategy:
       fail-fast: false
+      max-parallel: 2   # Lichess limits explorer requests per account
       matrix:
         opening: ${{ fromJson(needs.list.outputs.openings) }}
     steps:
@@ -43,7 +40,6 @@ jobs:
         env:
           LICHESS_TOKEN: ${{ secrets.LICHESS_TOKEN }}
           BOOK_BUDGET_SCALE: ${{ inputs.test && '0.01' || '1' }}
-          BOOK_AUTH: ${{ inputs.auth && '1' || '0' }}
         run: python -u -m tools.build_book --only ${{ matrix.opening }}
       - uses: actions/upload-artifact@v4
         with:
