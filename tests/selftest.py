@@ -59,6 +59,11 @@ move, note = guard.check(b, ok, cfg["guard"], fn)
 print("guard test 2:", b.san(move), "|", note, flush=True)
 assert move == ok and note is None
 assert b.fen().startswith("r1bqkbnr/pppp1ppp/2n5/4p2Q/2B1P3")   # board left unchanged
+# Assist test: a much worse natural candidate is replaced by a good Maia candidate.
+top = maia.choose(b, cfg["maia"], 2000, candidates=8)[1]
+amove, anote = guard.assist(b, blunder, top, cfg["assist"])
+print("assist test:", b.san(amove), "|", anote, flush=True)
+assert amove != blunder and anote
 
 # Book test: main openings (weight > 0) win over fallback (weight 0) openings.
 from bot.book import Book, key

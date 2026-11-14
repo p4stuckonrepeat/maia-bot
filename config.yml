@@ -5,12 +5,14 @@ maia:
   elo: 2600            # rating Maia imitates (trained range 600-2600)
   temperature: 0.8     # 0 = always most likely move, 1 = full human randomness
   top_p: 0.9           # only sample from the most likely moves covering this probability
+  oppo_elo: 2600       # opponent rating Maia assumes; "opponent" = real rating (plays sloppier vs weak players)
 
 style:                 # consistent playing style (one "person" across games)
   enabled: true
   name: positional     # solid structure, king safety, development, no speculative sacrifices
   strength: 1.5        # 0 = pure Maia, 1 = noticeable, 2+ = very consistent / predictable
   candidates: 8        # how many of Maia's most likely moves the style chooses between
+  min_relative_prob: 0.5  # style only picks moves at least half as likely as Maia's top choice
 
 timing:                # human-like thinking time, based only on how hard the move is
   enabled: true
@@ -22,6 +24,12 @@ timing:                # human-like thinking time, based only on how hard the mo
   long_think: [12.0, 25.0]
   long_think_chance: 0.05   # share of hard middlegame moves that get a long think
   # safety net: under 30 s on the clock it plays fast so it never loses on time
+
+assist:                # quality filter: only between Maia's own natural candidate moves
+  enabled: true        # stops clearly inferior choices (e.g. a 5% move when a 55% move is much better)
+  max_loss_cp: 100     # allowed gap to the best natural candidate (100 = 1 pawn)
+  min_prob: 0.03       # candidates Maia gives at least 3% are considered
+  depth: 12
 
 guard:                 # Stockfish blunder guard. Maia still chooses every move.
   enabled: true        # true = ON, false = OFF (applies mid-game within ~30 s)

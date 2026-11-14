@@ -22,6 +22,9 @@ class Maia:
     def choose(self, board, maia_cfg, opp_rating=None, candidates=1):
         """Return (sampled move, candidates ranked by Maia probability, seconds).
         Each candidate: {"move", "policy", "wdl"}; wdl is Maia's own win/draw/loss estimate."""
+        fixed = maia_cfg.get("oppo_elo", "opponent")
+        if isinstance(fixed, (int, float)):
+            opp_rating = fixed
         opp = int(min(2600, max(600, opp_rating or maia_cfg["elo"])))
         with self.lock:
             e = self.eng
@@ -44,8 +47,11 @@ class Maia:
         strength = float(style_cfg.get("strength", 1.0))
         temp = max(0.05, float(maia_cfg["temperature"]))
         total = sum(c["policy"] for c in top)
+        rel = float(style_cfg.get("min_relative_prob", 0.5))
         pool, mass = [], 0.0
-        for c in top:  # Maia's nucleus: most likely moves covering top_p of the probability
+        for c in top:  # Maia's nucleus, and only moves nearly as likely as Maia's top choice
+            if pool and c["policy"] < rel * top[0]["policy"]:
+                break
             pool.append(c)
             mass += c["policy"] / total
             if mass >= float(maia_cfg["top_p"]):
@@ -102,6 +108,27 @@ class Guard:
             best = self.sf.play(board, chess.engine.Limit(depth=depth)).move
             return best, (f"vetoed {board.san(move)} ({before:+}->{after:+}), "
                           f"no safe Maia move, played Stockfish's {board.san(best)}")
+
+    def assist(self, board, move, top, acfg):
+        """Quality filter between Maia's own candidate moves: if the chosen move is much worse
+        than another natural candidate, pick a natural candidate that is close to the best.
+        Return (move, note or None)."""
+        color, depth = board.turn, int(acfg.get("depth", 12))
+        cands = [c for c in top if c["policy"] >= float(acfg.get("min_prob", 0.03))]
+        if move not in [c["move"] for c in cands]:
+            cands.append({"move": move, "policy": 0.01})
+        if len(cands) < 2:
+            return move, None
+        with self.lock:
+            scores = {c["move"]: self.after(board, c["move"], color, depth) for c in cands}
+        best = max(scores.values())
+        limit = float(acfg.get("max_loss_cp", 100))
+        if best - scores[move] <= limit:
+            return move, None
+        ok = [c for c in cands if best - scores[c["move"]] <= limit]
+        pick = random.choices([c["move"] for c in ok], weights=[c["policy"] for c in ok])[0]
+        return pick, (f"assist: {board.san(move)} ({scores[move]:+}) -> Maia's "
+                      f"{board.san(pick)} ({scores[pick]:+})")
 
     def close(self):
         try:

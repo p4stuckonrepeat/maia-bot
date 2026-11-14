@@ -188,11 +188,22 @@ class Bot:
         top_prob = max((c["policy"] for c in top), default=0.5)
         clock = state.get("wtime" if color == chess.WHITE else "btime")
         low_clock = clock is not None and clock < gcfg.get("min_clock_seconds", 15) * 1000
-        if not gcfg.get("enabled") or low_clock or self.guard is None:
+        if self.guard is None or low_clock:
             return move, None, None, top_prob
-        move, note = self.guard.check(board, move, gcfg,
-                                      lambda: self.maia.choose(board, mcfg, opp_rating, candidates=8)[1])
-        return move, note, None, top_prob
+        notes = []
+        acfg = self.cfg.get("assist", {})
+        if acfg.get("enabled"):
+            if len(top) < 2:
+                top = self.maia.choose(board, mcfg, opp_rating, candidates=8)[1]
+            move, n = self.guard.assist(board, move, top, acfg)
+            if n:
+                notes.append(n)
+        if gcfg.get("enabled"):
+            move, n = self.guard.check(board, move, gcfg,
+                                       lambda: self.maia.choose(board, mcfg, opp_rating, candidates=8)[1])
+            if n:
+                notes.append(n)
+        return move, ("; ".join(notes) or None), None, top_prob
 
     def finish(self, gid, state, color, opp, opp_rating, vetoes=0, opening=None, book_moves=0):
         winner = state.get("winner")
