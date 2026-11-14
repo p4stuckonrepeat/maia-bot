@@ -132,6 +132,22 @@ b = _st.mean(think_seconds(120000, 0, 30, 0.6, 20, False, T, _r) for _ in range(
 print(f'timing normal move: 10 min left {a:.2f}s, 2 min left {b:.2f}s', flush=True)
 assert abs(a - b) < 1.0
 
+# Search test: after 3...Nf6?? the calculation sees Qxf7# (value for Black = 0).
+from bot.search import Search
+sr = Search(maia)
+b.push(blunder)
+v_white = sr.value(b, 1, (2600, 2600), [3])
+b.pop()
+print("search test: value of 3...Nf6 for Black =", round(1 - v_white, 2), flush=True)
+assert 1 - v_white < 0.05
+import time as _t
+mid = chess.Board()
+for m in ["e2e4", "c7c5", "g1f3", "d7d6", "d2d4", "c5d4", "f3d4", "g8f6", "b1c3", "a7a6", "c1e3", "e7e5", "d4b3", "c8e6"]:
+    mid.push_uci(m)
+t0 = _t.time(); mv, root, note = sr.choose(mid, cfg["maia"], cfg["search"], 2600)
+print(f"search move in Najdorf: {mid.san(mv) if mv else 'skipped'} in {_t.time() - t0:.2f}s; "
+      + ", ".join(f"{mid.san(c['move'])} p={c['policy']:.2f} v={c.get('value', 0):.2f}" for c in root), flush=True)
+
 bot = Bot(settings, api, maia, guard, "me", Book(path="/nonexistent"))
 
 def ch(cid, limit=180, inc=0, variant="standard", rated=True, title=None):

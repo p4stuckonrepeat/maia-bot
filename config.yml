@@ -7,6 +7,15 @@ maia:
   top_p: 0.9           # only sample from the most likely moves covering this probability
   oppo_elo: 2600       # opponent rating Maia assumes; "opponent" = real rating (plays sloppier vs weak players)
 
+search:                # light human-like calculation with Maia's own judgement (no Stockfish)
+  enabled: true
+  candidates: 4        # natural moves considered (Maia's most likely)
+  depth: 1             # 1 = check the opponent's likely replies; 2 = also our answer (slower)
+  widths: [3, 2]       # replies considered at each level
+  margin: 0.10         # moves within 10% expected score of the best line stay eligible
+  skip_if_prob: 0.9    # don't calculate when one move is obvious
+  min_clock_seconds: 30
+
 style:                 # consistent playing style (one "person" across games)
   enabled: false
   name: positional     # solid structure, king safety, development, no speculative sacrifices

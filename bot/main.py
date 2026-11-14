@@ -7,6 +7,7 @@ import time
 import chess
 from bot.book import Book
 from bot.engine import Guard, Maia
+from bot.search import Search
 from bot.lichess import Lichess
 from bot.settings import Settings
 from bot.timing import think_seconds
@@ -22,6 +23,7 @@ class Bot:
     def __init__(self, settings, api, maia, guard, me, book=None):
         self.settings, self.api, self.maia, self.guard, self.me = settings, api, maia, guard, me
         self.book = book or Book()
+        self.search = Search(maia)
         self.lock = threading.Lock()
         self.active = set()     # game ids being played
         self.pending = {}       # challenge id -> accept time (game not started yet)
@@ -154,7 +156,7 @@ class Bot:
                             wait = think - (time.time() - t0)
                             if wait > 0:
                                 time.sleep(wait)
-                            if note:
+                            if note and "vetoed" in note:
                                 vetoes += 1
                             if opening:
                                 book_moves += 1
@@ -184,16 +186,20 @@ class Bot:
             return move, None, opening, 1.0
         mcfg, gcfg, scfg = self.cfg["maia"], self.cfg.get("guard", {}), self.cfg.get("style", {})
         move, top = None, []
-        if scfg.get("enabled"):
+        srch = self.cfg.get("search", {})
+        clock = state.get("wtime" if color == chess.WHITE else "btime")
+        calc_note = None
+        if srch.get("enabled") and (clock is None or clock > srch.get("min_clock_seconds", 30) * 1000):
+            move, top, calc_note = self.search.choose(board, mcfg, srch, opp_rating)
+        if move is None and scfg.get("enabled"):
             move, top, _ = self.maia.choose_styled(board, mcfg, scfg, opp_rating)
         if move is None:
             move, top, _ = self.maia.choose(board, mcfg, opp_rating)
         top_prob = max((c["policy"] for c in top), default=0.5)
-        clock = state.get("wtime" if color == chess.WHITE else "btime")
         low_clock = clock is not None and clock < gcfg.get("min_clock_seconds", 15) * 1000
         if self.guard is None or low_clock:
-            return move, None, None, top_prob
-        notes = []
+            return move, calc_note, None, top_prob
+        notes = [calc_note] if calc_note else []
         acfg = self.cfg.get("assist", {})
         if acfg.get("enabled"):
             if len(top) < 2:
