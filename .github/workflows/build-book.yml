@@ -6,6 +6,10 @@ on:
         description: "Quick test run (tiny book, not saved)"
         type: boolean
         default: false
+      auth:
+        description: "Send the Lichess token to the explorer"
+        type: boolean
+        default: false
 permissions:
   contents: write
 jobs:
@@ -39,6 +43,7 @@ jobs:
         env:
           LICHESS_TOKEN: ${{ secrets.LICHESS_TOKEN }}
           BOOK_BUDGET_SCALE: ${{ inputs.test && '0.01' || '1' }}
+          BOOK_AUTH: ${{ inputs.auth && '1' || '0' }}
         run: python -u -m tools.build_book --only ${{ matrix.opening }}
       - uses: actions/upload-artifact@v4
         with:

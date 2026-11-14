@@ -28,7 +28,7 @@ DEPTH = 14
 TIME_LIMIT = float(os.environ.get("BOOK_TIME_LIMIT_MIN", "320")) * 60
 
 session = requests.Session()
-if os.environ.get("LICHESS_TOKEN"):
+if os.environ.get("LICHESS_TOKEN") and os.environ.get("BOOK_AUTH", "1") == "1":
     session.headers["Authorization"] = f"Bearer {os.environ['LICHESS_TOKEN']}"
 cache, start, requests_made = {}, time.time(), 0
 delay = [1.0]  # seconds between explorer requests; grows after rate limits
