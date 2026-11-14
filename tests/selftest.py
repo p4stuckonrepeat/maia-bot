@@ -88,6 +88,18 @@ after_c4 = chess.Board(); after_c4.push_uci("c2c4")
 assert bk.pick("y", after_c4, chess.BLACK, bcfg) == (None, None)       # out of book -> Maia
 print("book tests ok", flush=True)
 
+# Style tests: castling is preferred, weakening pawns / hanging pieces are not.
+from bot.style import positional_score
+b = chess.Board("r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4")
+assert positional_score(b, chess.Move.from_uci("e1g1")) > 0
+b1 = chess.Board("r1bq1rk1/pppp1ppp/2n2n2/2b1p3/2B1P3/3P1N2/PPP2PPP/RNBQ1RK1 w - - 1 6")
+assert positional_score(b1, chess.Move.from_uci("g2g4")) < positional_score(b1, chess.Move.from_uci("c2c3"))
+b2 = chess.Board("rnbqkbnr/ppp2ppp/8/3pp3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 3")
+assert positional_score(b2, chess.Move.from_uci("f3g5")) < 0       # hangs the knight to Qd8
+styled = [maia.choose_styled(chess.Board(), cfg["maia"], cfg["style"], 2000)[0] for _ in range(20)]
+assert all(m in chess.Board().legal_moves for m in styled)
+print("style tests ok:", sorted(set(m.uci() for m in styled)), flush=True)
+
 bot = Bot(settings, api, maia, guard, "me", Book(path="/nonexistent"))
 
 def ch(cid, limit=180, inc=0, variant="standard", rated=True, title=None):

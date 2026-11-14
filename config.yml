@@ -6,6 +6,12 @@ maia:
   temperature: 0.7     # 0 = always most likely move, 1 = full human randomness
   top_p: 0.9           # only sample from the most likely moves covering this probability
 
+style:                 # consistent playing style (one "person" across games)
+  enabled: true
+  name: positional     # solid structure, king safety, development, no speculative sacrifices
+  strength: 1.5        # 0 = pure Maia, 1 = noticeable, 2+ = very consistent / predictable
+  candidates: 8        # how many of Maia's most likely moves the style chooses between
+
 guard:                 # Stockfish blunder guard. Maia still chooses every move.
   enabled: true        # true = ON, false = OFF (applies mid-game within ~30 s)
   playable_cp: -150    # only check moves when the position is at least this good for the bot

@@ -170,8 +170,12 @@ class Bot:
         move, opening = self.book.pick(gid, board, color, self.cfg)
         if move:
             return move, None, opening
-        mcfg, gcfg = self.cfg["maia"], self.cfg.get("guard", {})
-        move, _, _ = self.maia.choose(board, mcfg, opp_rating)
+        mcfg, gcfg, scfg = self.cfg["maia"], self.cfg.get("guard", {}), self.cfg.get("style", {})
+        move = None
+        if scfg.get("enabled"):
+            move, _, _ = self.maia.choose_styled(board, mcfg, scfg, opp_rating)
+        if move is None:
+            move, _, _ = self.maia.choose(board, mcfg, opp_rating)
         clock = state.get("wtime" if color == chess.WHITE else "btime")
         low_clock = clock is not None and clock < gcfg.get("min_clock_seconds", 15) * 1000
         if not gcfg.get("enabled") or low_clock or self.guard is None:
@@ -235,6 +239,8 @@ def run(settings, api, maia, guard, acc, me, args):
         return
 
     log(f"Blunder guard: {'ON' if cfg.get('guard', {}).get('enabled') else 'OFF'}")
+    st = cfg.get("style", {})
+    log(f"Style: {st.get('name', 'positional') + ' ' + str(st.get('strength')) if st.get('enabled') else 'OFF'}")
     book = Book()
     log(f"Opening book: {book.loaded()} positions in {len(book.openings)} openings")
     bot = Bot(settings, api, maia, guard, me, book)

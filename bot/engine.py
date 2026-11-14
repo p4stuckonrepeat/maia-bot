@@ -1,10 +1,14 @@
 """Maia-3 move selection (in-process) plus the optional Stockfish blunder guard."""
+import math
+import random
 import threading
 import time
 
 import chess
 import chess.engine
 from maia3.uci import Maia3UCIEngine, parse_args
+
+from bot.style import STYLES
 
 
 class Maia:
@@ -29,6 +33,26 @@ class Maia:
             t = time.time()
             move, top = e.score_moves()
             return move, top, time.time() - t
+
+    def choose_styled(self, board, maia_cfg, style_cfg, opp_rating=None):
+        """Maia's natural moves, re-weighted by a consistent playing style.
+        Only moves inside Maia's own top-p set are eligible; temperature applies as usual."""
+        _, top, secs = self.choose(board, maia_cfg, opp_rating, candidates=int(style_cfg.get("candidates", 8)))
+        if not top:
+            return None, top, secs
+        score_fn = STYLES[style_cfg.get("name", "positional")]
+        strength = float(style_cfg.get("strength", 1.0))
+        temp = max(0.05, float(maia_cfg["temperature"]))
+        total = sum(c["policy"] for c in top)
+        pool, mass = [], 0.0
+        for c in top:  # Maia's nucleus: most likely moves covering top_p of the probability
+            pool.append(c)
+            mass += c["policy"] / total
+            if mass >= float(maia_cfg["top_p"]):
+                break
+        weights = [(c["policy"] ** (1 / temp)) * math.exp(strength * score_fn(board, c["move"]))
+                   for c in pool]
+        return random.choices([c["move"] for c in pool], weights=weights)[0], top, secs
 
 
 class Guard:
