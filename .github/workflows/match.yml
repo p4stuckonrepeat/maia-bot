@@ -1,0 +1,38 @@
+name: Test matches
+on:
+  workflow_dispatch:
+    inputs:
+      games:
+        description: "Games against each opponent"
+        default: "3"
+      sf_elo:
+        description: "Stockfish strength (UCI_Elo)"
+        default: "2500"
+jobs:
+  match:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: maia3-79m
+      - name: Install
+        run: |
+          sudo apt-get update && sudo apt-get install -y stockfish
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt git+https://github.com/CSSLab/maia3@1e13597c42d4858b7cfd7cfdae01e297263364b2
+          maia3-cache --model maia3-79m
+      - name: Play
+        env:
+          MATCH_GAMES: ${{ inputs.games }}
+          MATCH_SF_ELO: ${{ inputs.sf_elo }}
+        run: python -u -m tools.match
+      - uses: actions/upload-artifact@v4
+        with:
+          name: test-matches
+          path: test-matches.pgn
