@@ -30,12 +30,19 @@ jobs:
           ELITE_MONTHS: ${{ inputs.test && '1' || inputs.months }}
           BOOK_BUDGET_SCALE: ${{ inputs.test && '0.02' || '1' }}
         run: python -u -m tools.build_book
+      - uses: actions/upload-artifact@v4
+        with:
+          name: book
+          path: book.json
       - name: Save book.json to the repo
         if: ${{ !inputs.test }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git pull --rebase origin ${{ github.ref_name }}
+          cp book.json /tmp/book.json
+          git fetch origin ${{ github.ref_name }}
+          git reset --hard origin/${{ github.ref_name }}
+          cp /tmp/book.json book.json
           git add book.json
           git commit -m "Rebuild opening book (Elite Database)" || echo "no changes"
           git push
