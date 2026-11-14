@@ -114,6 +114,8 @@ class Guard:
         than another natural candidate, pick a natural candidate that is close to the best.
         Return (move, note or None)."""
         color, depth = board.turn, int(acfg.get("depth", 12))
+        if acfg.get("only_when_not_top", True) and top and move == top[0]["move"]:
+            return move, None  # Maia's own first choice: keep its natural (human) inaccuracies
         cands = [c for c in top if c["policy"] >= float(acfg.get("min_prob", 0.03))]
         if move not in [c["move"] for c in cands]:
             cands.append({"move": move, "policy": 0.01})
