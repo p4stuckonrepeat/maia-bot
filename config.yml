@@ -12,9 +12,16 @@ style:                 # consistent playing style (one "person" across games)
   strength: 1.5        # 0 = pure Maia, 1 = noticeable, 2+ = very consistent / predictable
   candidates: 8        # how many of Maia's most likely moves the style chooses between
 
-timing:                # human-like thinking time
-  enabled: true        # fast in the opening and for obvious moves, longer in hard positions
-  speed: 1.0           # 1.5 = slower and more deliberate, 0.7 = faster
+timing:                # human-like thinking time, based only on how hard the move is
+  enabled: true
+  speed: 1.0           # multiplies all times: 1.5 = slower, 0.7 = faster
+  book: [0.4, 1.8]     # seconds (min, max) for prepared opening moves
+  obvious: [0.5, 1.5]  # recaptures and moves Maia is very sure about
+  normal: [1.5, 5.0]
+  hard: [4.0, 10.0]    # several plausible moves
+  long_think: [12.0, 25.0]
+  long_think_chance: 0.05   # share of hard middlegame moves that get a long think
+  # safety net: under 30 s on the clock it plays fast so it never loses on time
 
 guard:                 # Stockfish blunder guard. Maia still chooses every move.
   enabled: true        # true = ON, false = OFF (applies mid-game within ~30 s)
