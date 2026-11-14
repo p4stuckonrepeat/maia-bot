@@ -3,9 +3,9 @@ import faulthandler, sys
 faulthandler.dump_traceback_later(90, exit=True)
 import time
 import chess
-import yaml
 from bot.main import Bot
-from bot.engine import Maia
+from bot.engine import Guard, Maia
+from bot.settings import Settings
 
 
 class FakeApi:
@@ -36,12 +36,31 @@ class FakeApi:
         yield {"type": "gameState", "moves": " ".join(self.moves), "status": "resign", "winner": "white"}
 
 
-cfg = yaml.safe_load(open("config.yml"))
+settings = Settings()
+cfg = settings.cfg
 api = FakeApi()
 print("starting Maia", flush=True)
-maia = Maia(cfg["maia"])
-print("Maia started, first move:", maia.choose(chess.Board()), flush=True)
-bot = Bot(cfg, api, maia, "me")
+maia = Maia(cfg["maia"]["model"])
+print("Maia started, first move:", maia.choose(chess.Board(), cfg["maia"])[0], flush=True)
+guard = Guard()
+
+# Guard test 1: 3...Nf6?? allows Qxf7# -> must be vetoed and replaced by a Maia alternative.
+b = chess.Board()
+for m in ["e2e4", "e7e5", "d1h5", "b8c6", "f1c4"]:
+    b.push_uci(m)
+blunder = chess.Move.from_uci("g8f6")
+fn = lambda: maia.choose(b, cfg["maia"], 2000, candidates=8)[1]
+move, note = guard.check(b, blunder, cfg["guard"], fn)
+print("guard test 1:", b.san(move), "|", note, flush=True)
+assert move != blunder and note
+# Guard test 2: a normal move (3...g6) must pass untouched.
+ok = chess.Move.from_uci("g7g6")
+move, note = guard.check(b, ok, cfg["guard"], fn)
+print("guard test 2:", b.san(move), "|", note, flush=True)
+assert move == ok and note is None
+assert b.fen().startswith("r1bqkbnr/pppp1ppp/2n5/4p2Q/2B1P3")   # board left unchanged
+
+bot = Bot(settings, api, maia, guard, "me")
 
 def ch(cid, limit=180, inc=0, variant="standard", rated=True, title=None):
     return {"id": cid, "challenger": {"id": "x", "name": "X", "rating": 1500, "title": title},
@@ -66,5 +85,5 @@ b = chess.Board()
 for m in api.moves:
     b.push_uci(m)   # every move legal
 print("SELFTEST PASSED:", chess.Board().variation_san(b.move_stack))
-maia.close()
+guard.close()
 faulthandler.cancel_dump_traceback_later()

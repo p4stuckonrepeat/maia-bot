@@ -11,8 +11,10 @@ on:
         description: "Session length in hours (max 5.5)"
         default: "5"
 concurrency:
-  group: lichess-bot
+  group: lichess-bot-${{ inputs.mode }}
   cancel-in-progress: false
+permissions:
+  contents: read
 jobs:
   bot:
     runs-on: ubuntu-latest
@@ -28,8 +30,9 @@ jobs:
           key: maia3-79m
       - name: Install
         run: |
+          sudo apt-get update && sudo apt-get install -y stockfish
           pip install torch --index-url https://download.pytorch.org/whl/cpu
-          pip install -r requirements.txt git+https://github.com/CSSLab/maia3
+          pip install -r requirements.txt git+https://github.com/CSSLab/maia3@1e13597c42d4858b7cfd7cfdae01e297263364b2
           maia3-cache --model maia3-79m
       - name: Self-test (offline)
         timeout-minutes: 5
@@ -37,6 +40,7 @@ jobs:
       - name: Bot
         env:
           LICHESS_TOKEN: ${{ secrets.LICHESS_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           if [ -z "$LICHESS_TOKEN" ]; then echo "::error::Secret LICHESS_TOKEN is missing"; exit 1; fi
           if [ "${{ inputs.mode }}" = "check" ]; then

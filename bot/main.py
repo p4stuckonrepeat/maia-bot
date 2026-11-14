@@ -5,10 +5,9 @@ import threading
 import time
 
 import chess
-import yaml
-
-from bot.engine import Maia
+from bot.engine import Guard, Maia
 from bot.lichess import Lichess
+from bot.settings import Settings
 
 STANDARD_FEN = chess.STARTING_FEN
 
@@ -18,13 +17,17 @@ def log(msg):
 
 
 class Bot:
-    def __init__(self, cfg, api, maia, me):
-        self.cfg, self.api, self.maia, self.me = cfg, api, maia, me
+    def __init__(self, settings, api, maia, guard, me):
+        self.settings, self.api, self.maia, self.guard, self.me = settings, api, maia, guard, me
         self.lock = threading.Lock()
         self.active = set()     # game ids being played
         self.pending = {}       # challenge id -> accept time (game not started yet)
         self.accepting = True
         self.results = []
+
+    @property
+    def cfg(self):
+        return self.settings.cfg
 
     # ---------- challenges ----------
     def decline_reason(self, ch):
@@ -100,6 +103,7 @@ class Bot:
     # ---------- games ----------
     def play_game(self, gid):
         color, opp, opp_rating, sent_ply, finished = None, "?", None, -1, False
+        vetoes = 0
         failures = 0
         log(f"[{gid}] game started")
         try:
@@ -125,7 +129,7 @@ class Bot:
                         else:
                             continue
                         if state["status"] not in ("created", "started"):
-                            self.finish(gid, state, color, opp, opp_rating)
+                            self.finish(gid, state, color, opp, opp_rating, vetoes)
                             finished = True
                             break
                         moves = state["moves"].split()
@@ -133,11 +137,15 @@ class Bot:
                         for m in moves:
                             board.push_uci(m)
                         if board.turn == color and len(moves) != sent_ply and not board.is_game_over():
-                            move, secs = self.maia.choose(board, opp_rating)
+                            t0 = time.time()
+                            move, note = self.pick_move(board, state, color, opp_rating)
+                            if note:
+                                vetoes += 1
                             if self.api.move(gid, move.uci()):
                                 sent_ply = len(moves)
                                 log(f"[{gid}] {board.fullmove_number}{'.' if color else '...'}"
-                                    f"{board.san(move)} ({secs:.2f}s)")
+                                    f"{board.san(move)} ({time.time() - t0:.2f}s)"
+                                    + (f"  GUARD: {note}" if note else ""))
                 except Exception as e:
                     failures += 1
                     log(f"[{gid}] stream error: {e}")
@@ -149,16 +157,26 @@ class Bot:
                 self.active.discard(gid)
             log(f"[{gid}] game thread ended")
 
-    def finish(self, gid, state, color, opp, opp_rating):
+    def pick_move(self, board, state, color, opp_rating):
+        mcfg, gcfg = self.cfg["maia"], self.cfg.get("guard", {})
+        move, _, _ = self.maia.choose(board, mcfg, opp_rating)
+        clock = state.get("wtime" if color == chess.WHITE else "btime")
+        low_clock = clock is not None and clock < gcfg.get("min_clock_seconds", 15) * 1000
+        if not gcfg.get("enabled") or low_clock or self.guard is None:
+            return move, None
+        return self.guard.check(board, move, gcfg,
+                                lambda: self.maia.choose(board, mcfg, opp_rating, candidates=8)[1])
+
+    def finish(self, gid, state, color, opp, opp_rating, vetoes=0):
         winner = state.get("winner")
         if winner is None:
             result = "draw" if state["status"] in ("draw", "stalemate") else state["status"]
         else:
             mine = "white" if color == chess.WHITE else "black"
             result = "win" if winner == mine else "loss"
-        self.results.append((gid, opp, opp_rating, result, state["status"]))
-        log(f"[{gid}] finished vs {opp} ({opp_rating}): {result} ({state['status']}) "
-            f"https://lichess.org/{gid}")
+        self.results.append((gid, opp, opp_rating, result, state["status"], vetoes))
+        log(f"[{gid}] finished vs {opp} ({opp_rating}): {result} ({state['status']}), "
+            f"guard vetoes: {vetoes} https://lichess.org/{gid}")
 
 
 def main():
@@ -167,7 +185,8 @@ def main():
     p.add_argument("--check", action="store_true", help="check token and Maia, do not go online")
     args = p.parse_args()
 
-    cfg = yaml.safe_load(open("config.yml"))
+    settings = Settings()
+    cfg = settings.cfg
     api = Lichess(os.environ["LICHESS_TOKEN"])
     acc = api.account()
     me, games_played = acc["id"], acc.get("count", {}).get("all", 0)
@@ -183,15 +202,17 @@ def main():
         if not ok:
             raise SystemExit(1)
 
-    maia = Maia(cfg["maia"])
+    maia = Maia(cfg["maia"]["model"])
+    guard = Guard()
     try:
-        run(cfg, api, maia, acc, me, args)
+        run(settings, api, maia, guard, acc, me, args)
     finally:
-        maia.close()
+        guard.close()
 
 
-def run(cfg, api, maia, acc, me, args):
-    mv, secs = maia.choose(chess.Board())
+def run(settings, api, maia, guard, acc, me, args):
+    cfg = settings.cfg
+    mv, _, secs = maia.choose(chess.Board(), cfg["maia"])
     log(f"Maia-3 ready ({cfg['maia']['model']}, elo {cfg['maia']['elo']}, "
         f"temp {cfg['maia']['temperature']}, top_p {cfg['maia']['top_p']}): "
         f"first move {mv} in {secs:.2f}s")
@@ -199,11 +220,13 @@ def run(cfg, api, maia, acc, me, args):
         log("Check finished. Everything works; the bot did not go online.")
         return
 
-    bot = Bot(cfg, api, maia, me)
+    log(f"Blunder guard: {'ON' if cfg.get('guard', {}).get('enabled') else 'OFF'}")
+    bot = Bot(settings, api, maia, guard, me)
+    settings.start(log)
     threading.Thread(target=bot.event_loop, daemon=True).start()
     hours = min(args.hours, 5.6)
     end = time.time() + hours * 3600
-    stop_accept = end - cfg["session"]["stop_accepting_minutes_before_end"] * 60
+    stop_accept = end - settings.cfg["session"]["stop_accepting_minutes_before_end"] * 60
     log(f"Online as https://lichess.org/@/{acc['username']} for {hours:g} h. Waiting for challenges...")
 
     while True:
@@ -225,8 +248,9 @@ def run(cfg, api, maia, acc, me, args):
     if summary:
         with open(summary, "a") as f:
             f.write(f"## Bot session\nGames: {len(bot.results)} | W {w} D {d} L {l}\n\n")
-            for gid, opp, rating, result, status in bot.results:
-                f.write(f"- [{result}] vs {opp} ({rating}), {status}: https://lichess.org/{gid}\n")
+            for gid, opp, rating, result, status, vetoes in bot.results:
+                f.write(f"- [{result}] vs {opp} ({rating}), {status}, guard vetoes {vetoes}: "
+                        f"https://lichess.org/{gid}\n")
 
 
 if __name__ == "__main__":
