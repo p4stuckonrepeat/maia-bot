@@ -1,0 +1,50 @@
+name: Benchmark Maia-3
+on: workflow_dispatch
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: maia3-79m
+      - name: Install
+        run: |
+          sudo apt-get update && sudo apt-get install -y stockfish
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install git+https://github.com/CSSLab/maia3
+          maia3-cache --model maia3-79m
+      - name: Benchmark
+        run: |
+          cat > bench.py <<'EOF'
+          import chess, chess.engine, time, statistics, os
+          def run(mpv):
+              e = chess.engine.SimpleEngine.popen_uci(["maia3-uci", "--model", "maia3-79m",
+                  "--use-uci-history", "--elo", "2600", "--multipv", str(mpv)])
+              b = chess.Board(); e.play(b, chess.engine.Limit(nodes=1)); ts = []
+              for _ in range(40):
+                  if b.is_game_over(): break
+                  t = time.time(); m = e.play(b, chess.engine.Limit(nodes=1)).move
+                  ts.append(time.time() - t); b.push(m)
+              e.quit(); return statistics.median(ts), max(ts), b
+          r1 = run(1); r5 = run(5)
+          sf = chess.engine.SimpleEngine.popen_uci("/usr/games/stockfish")
+          sf.configure({"Threads": os.cpu_count()}); st = []; b = chess.Board()
+          for m in r1[2].move_stack[:20]:
+              b.push(m); t = time.time(); sf.analyse(b, chess.engine.Limit(depth=16)); st.append(time.time() - t)
+          sf.quit()
+          out = f"""## Maia-3 79M benchmark
+          - CPUs: {os.cpu_count()}
+          - Maia move, 1 candidate: median {r1[0]:.3f}s, max {r1[1]:.3f}s
+          - Maia move, 5 candidates: median {r5[0]:.3f}s, max {r5[1]:.3f}s
+          - Stockfish depth 16: median {statistics.median(st):.3f}s
+
+          Sample game (Maia 2600 vs itself): {chess.Board().variation_san(r1[2].move_stack)}
+          """
+          print(out); open(os.environ["GITHUB_STEP_SUMMARY"], "a").write(out)
+          EOF
+          python bench.py
