@@ -32,7 +32,8 @@ jobs:
           pip install -r requirements.txt git+https://github.com/CSSLab/maia3
           maia3-cache --model maia3-79m
       - name: Self-test (offline)
-        run: python -m tests.selftest
+        timeout-minutes: 5
+        run: python -u -m tests.selftest
       - name: Bot
         env:
           LICHESS_TOKEN: ${{ secrets.LICHESS_TOKEN }}

@@ -1,4 +1,6 @@
 """Offline self-test: challenge filter + game loop against a fake Lichess, real Maia."""
+import faulthandler, sys
+faulthandler.dump_traceback_later(90, exit=True)
 import time
 import chess
 import yaml
@@ -36,7 +38,10 @@ class FakeApi:
 
 cfg = yaml.safe_load(open("config.yml"))
 api = FakeApi()
-bot = Bot(cfg, api, Maia(cfg["maia"]), "me")
+print("starting Maia", flush=True)
+maia = Maia(cfg["maia"])
+print("Maia started, first move:", maia.choose(chess.Board()), flush=True)
+bot = Bot(cfg, api, maia, "me")
 
 def ch(cid, limit=180, inc=0, variant="standard", rated=True, title=None):
     return {"id": cid, "challenger": {"id": "x", "name": "X", "rating": 1500, "title": title},
@@ -51,6 +56,7 @@ bot.on_challenge(ch("d")); assert api.accepted == ["d"]
 assert bot.decline_reason(ch("e")) == "later"   # max_games = 1 while d is pending
 bot.pending.clear()
 
+print("filter tests ok", flush=True)
 bot.active.add("g1")
 bot.play_game("g1")
 assert len(api.sent) == 7, api.sent   # first move + one reply to each of 6 opponent moves
