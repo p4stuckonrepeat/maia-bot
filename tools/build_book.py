@@ -31,6 +31,7 @@ session = requests.Session()
 if os.environ.get("LICHESS_TOKEN"):
     session.headers["Authorization"] = f"Bearer {os.environ['LICHESS_TOKEN']}"
 cache, start, requests_made = {}, time.time(), 0
+delay = [1.0]  # seconds between explorer requests; grows after rate limits
 
 
 def key(board):
@@ -51,7 +52,8 @@ def explore(board):
             continue
         requests_made += 1
         if r.status_code == 429:
-            print("rate limited, waiting 60s", flush=True)
+            delay[0] = min(5.0, delay[0] + 0.5)
+            print(f"rate limited, waiting 60s (delay now {delay[0]}s)", flush=True)
             time.sleep(60)
             continue
         if r.status_code != 200:
@@ -69,7 +71,7 @@ def explore(board):
                 continue
             moves.append((mv.uci(), m["white"] + m["draws"] + m["black"]))
         cache[k] = (d["white"] + d["draws"] + d["black"], moves)
-        time.sleep(0.25)
+        time.sleep(delay[0])
         return cache[k]
     return 0, []
 
