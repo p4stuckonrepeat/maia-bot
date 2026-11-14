@@ -27,3 +27,24 @@ challenges:
 
 session:
   stop_accepting_minutes_before_end: 20
+
+openings:
+  # weight > 0 = preferred (chosen by weight). weight 0 = only used when no preferred
+  # opening fits the game (e.g. after the opponent's first move). Lines: our moves and the
+  # opponent's moves in order; "*" = any common opponent move. Deep lines live in book.json.
+  white:
+    ruy_lopez:           {weight: 100, line: "e2e4 e7e5 g1f3 b8c6 f1b5", budget: 2000}
+    italian:             {weight: 0, line: "e2e4 e7e5 g1f3 b8c6 f1c4", budget: 150}
+    queens_gambit:       {weight: 0, line: "d2d4 d7d5 c2c4", budget: 150}
+    london:              {weight: 0, line: "d2d4 * c1f4", budget: 150}
+    english:             {weight: 0, line: "c2c4", budget: 150}
+    kings_indian_attack: {weight: 0, line: "g1f3 * g2g3 * f1g2", budget: 150}
+  black:
+    sicilian:            {weight: 100, line: "e2e4 c7c5", budget: 2000}
+    caro_kann:           {weight: 0, line: "e2e4 c7c6", budget: 150}
+    french:              {weight: 0, line: "e2e4 e7e6", budget: 150}
+    e5_and_ruy_lopez:    {weight: 0, line: "e2e4 e7e5", budget: 400}
+    kings_indian:        {weight: 100, line: "d2d4 g8f6 * g7g6 * f8g7 * d7d6", budget: 1500}
+    queens_gambit_declined: {weight: 0, line: "d2d4 d7d5 c2c4 e7e6", budget: 150}
+  book:
+    enabled: true

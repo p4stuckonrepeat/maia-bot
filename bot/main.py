@@ -5,6 +5,7 @@ import threading
 import time
 
 import chess
+from bot.book import Book
 from bot.engine import Guard, Maia
 from bot.lichess import Lichess
 from bot.settings import Settings
@@ -17,8 +18,9 @@ def log(msg):
 
 
 class Bot:
-    def __init__(self, settings, api, maia, guard, me):
+    def __init__(self, settings, api, maia, guard, me, book=None):
         self.settings, self.api, self.maia, self.guard, self.me = settings, api, maia, guard, me
+        self.book = book or Book()
         self.lock = threading.Lock()
         self.active = set()     # game ids being played
         self.pending = {}       # challenge id -> accept time (game not started yet)
@@ -103,7 +105,7 @@ class Bot:
     # ---------- games ----------
     def play_game(self, gid):
         color, opp, opp_rating, sent_ply, finished = None, "?", None, -1, False
-        vetoes = 0
+        vetoes, book_moves, last_opening = 0, 0, None
         failures = 0
         log(f"[{gid}] game started")
         try:
@@ -129,7 +131,8 @@ class Bot:
                         else:
                             continue
                         if state["status"] not in ("created", "started"):
-                            self.finish(gid, state, color, opp, opp_rating, vetoes)
+                            self.finish(gid, state, color, opp, opp_rating, vetoes,
+                                        last_opening, book_moves)
                             finished = True
                             break
                         moves = state["moves"].split()
@@ -138,14 +141,18 @@ class Bot:
                             board.push_uci(m)
                         if board.turn == color and len(moves) != sent_ply and not board.is_game_over():
                             t0 = time.time()
-                            move, note = self.pick_move(board, state, color, opp_rating)
+                            move, note, opening = self.pick_move(gid, board, state, color, opp_rating)
                             if note:
                                 vetoes += 1
+                            if opening:
+                                book_moves += 1
+                                last_opening = opening
                             if self.api.move(gid, move.uci()):
                                 sent_ply = len(moves)
                                 log(f"[{gid}] {board.fullmove_number}{'.' if color else '...'}"
                                     f"{board.san(move)} ({time.time() - t0:.2f}s)"
-                                    + (f"  GUARD: {note}" if note else ""))
+                                    + (f"  GUARD: {note}" if note else "")
+                                    + (f"  [book: {opening}]" if opening else ""))
                 except Exception as e:
                     failures += 1
                     log(f"[{gid}] stream error: {e}")
@@ -155,28 +162,35 @@ class Bot:
         finally:
             with self.lock:
                 self.active.discard(gid)
+            self.book.end(gid)
             log(f"[{gid}] game thread ended")
 
-    def pick_move(self, board, state, color, opp_rating):
+    def pick_move(self, gid, board, state, color, opp_rating):
+        """Return (move, guard note or None, opening name if the move came from the book)."""
+        move, opening = self.book.pick(gid, board, color, self.cfg)
+        if move:
+            return move, None, opening
         mcfg, gcfg = self.cfg["maia"], self.cfg.get("guard", {})
         move, _, _ = self.maia.choose(board, mcfg, opp_rating)
         clock = state.get("wtime" if color == chess.WHITE else "btime")
         low_clock = clock is not None and clock < gcfg.get("min_clock_seconds", 15) * 1000
         if not gcfg.get("enabled") or low_clock or self.guard is None:
-            return move, None
-        return self.guard.check(board, move, gcfg,
-                                lambda: self.maia.choose(board, mcfg, opp_rating, candidates=8)[1])
+            return move, None, None
+        move, note = self.guard.check(board, move, gcfg,
+                                      lambda: self.maia.choose(board, mcfg, opp_rating, candidates=8)[1])
+        return move, note, None
 
-    def finish(self, gid, state, color, opp, opp_rating, vetoes=0):
+    def finish(self, gid, state, color, opp, opp_rating, vetoes=0, opening=None, book_moves=0):
         winner = state.get("winner")
         if winner is None:
             result = "draw" if state["status"] in ("draw", "stalemate") else state["status"]
         else:
             mine = "white" if color == chess.WHITE else "black"
             result = "win" if winner == mine else "loss"
-        self.results.append((gid, opp, opp_rating, result, state["status"], vetoes))
+        self.results.append((gid, opp, opp_rating, result, state["status"], vetoes, opening, book_moves))
         log(f"[{gid}] finished vs {opp} ({opp_rating}): {result} ({state['status']}), "
-            f"guard vetoes: {vetoes} https://lichess.org/{gid}")
+            f"opening: {opening or '-'} ({book_moves} book moves), guard vetoes: {vetoes} "
+            f"https://lichess.org/{gid}")
 
 
 def main():
@@ -221,7 +235,9 @@ def run(settings, api, maia, guard, acc, me, args):
         return
 
     log(f"Blunder guard: {'ON' if cfg.get('guard', {}).get('enabled') else 'OFF'}")
-    bot = Bot(settings, api, maia, guard, me)
+    book = Book()
+    log(f"Opening book: {book.loaded()} positions in {len(book.openings)} openings")
+    bot = Bot(settings, api, maia, guard, me, book)
     settings.start(log)
     threading.Thread(target=bot.event_loop, daemon=True).start()
     hours = min(args.hours, 5.6)
@@ -248,9 +264,9 @@ def run(settings, api, maia, guard, acc, me, args):
     if summary:
         with open(summary, "a") as f:
             f.write(f"## Bot session\nGames: {len(bot.results)} | W {w} D {d} L {l}\n\n")
-            for gid, opp, rating, result, status, vetoes in bot.results:
-                f.write(f"- [{result}] vs {opp} ({rating}), {status}, guard vetoes {vetoes}: "
-                        f"https://lichess.org/{gid}\n")
+            for gid, opp, rating, result, status, vetoes, opening, bm in bot.results:
+                f.write(f"- [{result}] vs {opp} ({rating}), {status}, {opening or 'no book'} "
+                        f"({bm} book moves), guard vetoes {vetoes}: https://lichess.org/{gid}\n")
 
 
 if __name__ == "__main__":

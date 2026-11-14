@@ -60,7 +60,35 @@ print("guard test 2:", b.san(move), "|", note, flush=True)
 assert move == ok and note is None
 assert b.fen().startswith("r1bqkbnr/pppp1ppp/2n5/4p2Q/2B1P3")   # board left unchanged
 
-bot = Bot(settings, api, maia, guard, "me")
+# Book test: main openings (weight > 0) win over fallback (weight 0) openings.
+from bot.book import Book, key
+bk = Book(path="/nonexistent")
+start = key(chess.Board())
+after_e4 = chess.Board(); after_e4.push_uci("e2e4")
+after_d4 = chess.Board(); after_d4.push_uci("d2d4")
+bk.openings = {
+    "ruy_lopez": {"color": "white", "positions": {start: [["e2e4", 1]]}},
+    "english": {"color": "white", "positions": {start: [["c2c4", 1]]}},
+    "sicilian": {"color": "black", "positions": {key(after_e4): [["c7c5", 1]]}},
+    "caro_kann": {"color": "black", "positions": {key(after_e4): [["c7c6", 1]]}},
+    "kings_indian": {"color": "black", "positions": {key(after_d4): [["g8f6", 1]]}},
+    "french": {"color": "black", "positions": {key(after_d4): [["e7e6", 1]]}},  # fake, weight 0
+}
+bcfg = {"openings": {"white": {"ruy_lopez": {"weight": 100}, "english": {"weight": 0}},
+                     "black": {"sicilian": {"weight": 100}, "caro_kann": {"weight": 0},
+                               "kings_indian": {"weight": 100}, "french": {"weight": 0}}}}
+for i in range(50):
+    assert bk.pick(f"w{i}", chess.Board(), chess.WHITE, bcfg)[0].uci() == "e2e4"
+    assert bk.pick(f"b{i}", after_e4, chess.BLACK, bcfg)[0].uci() == "c7c5"
+    assert bk.pick(f"d{i}", after_d4, chess.BLACK, bcfg)[0].uci() == "g8f6"
+bcfg["openings"]["black"]["kings_indian"]["weight"] = 0
+bcfg["openings"]["black"].pop("french")
+assert bk.pick("x", after_d4, chess.BLACK, bcfg)[0].uci() == "g8f6"   # fallback when nothing else fits
+after_c4 = chess.Board(); after_c4.push_uci("c2c4")
+assert bk.pick("y", after_c4, chess.BLACK, bcfg) == (None, None)       # out of book -> Maia
+print("book tests ok", flush=True)
+
+bot = Bot(settings, api, maia, guard, "me", Book(path="/nonexistent"))
 
 def ch(cid, limit=180, inc=0, variant="standard", rated=True, title=None):
     return {"id": cid, "challenger": {"id": "x", "name": "X", "rating": 1500, "title": title},
