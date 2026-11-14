@@ -1,0 +1,41 @@
+name: Build opening book (fast)
+on:
+  workflow_dispatch:
+    inputs:
+      test:
+        description: "Quick test run (1 month, tiny book, not saved)"
+        type: boolean
+        default: false
+      months:
+        description: "Months of Elite Database games to use"
+        default: "4"
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          sudo apt-get update && sudo apt-get install -y stockfish
+          pip install -r requirements.txt
+      - name: Build book
+        env:
+          BOOK_SOURCE: elite
+          ELITE_MONTHS: ${{ inputs.test && '1' || inputs.months }}
+          BOOK_BUDGET_SCALE: ${{ inputs.test && '0.02' || '1' }}
+        run: python -u -m tools.build_book
+      - name: Save book.json to the repo
+        if: ${{ !inputs.test }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase origin ${{ github.ref_name }}
+          git add book.json
+          git commit -m "Rebuild opening book (Elite Database)" || echo "no changes"
+          git push

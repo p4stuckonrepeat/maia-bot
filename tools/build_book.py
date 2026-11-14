@@ -19,7 +19,8 @@ import yaml
 EXPLORER = "https://explorer.lichess.ovh/lichess"
 PARAMS = {"variant": "standard", "speeds": "blitz,rapid,classical", "ratings": "2200,2500",
           "moves": 15, "topGames": 0, "recentGames": 0}
-MIN_NODE_GAMES = 60      # stop expanding positions rarer than this
+SOURCE = os.environ.get("BOOK_SOURCE", "explorer")  # "elite" = downloaded Elite Database
+MIN_NODE_GAMES = int(os.environ.get("BOOK_MIN_GAMES", "20" if SOURCE == "elite" else "60"))
 MIN_MOVE_SHARE = 0.04    # opponent replies below this share of games are left to Maia
 OUR_MIN_SHARE = 0.10     # our candidates must be >= 10% as popular as the top choice
 MAX_LOSS_CP = 40         # ...and within 0.4 pawns of the best candidate (Stockfish)
@@ -38,10 +39,18 @@ def key(board):
     return " ".join(board.fen().split()[:4])
 
 
+TABLE = None  # filled from the Elite Database when SOURCE == "elite"
+
+
 def explore(board):
     global requests_made
     k = key(board)
     if k in cache:
+        return cache[k]
+    if TABLE is not None:
+        c = TABLE.get(k)
+        moves = sorted(c.items(), key=lambda x: -x[1]) if c else []
+        cache[k] = (sum(n for _, n in moves), moves)
         return cache[k]
     for attempt in range(8):
         try:
@@ -184,9 +193,14 @@ def main():
         return merge(sys.argv[2:])
     only = sys.argv[2] if len(sys.argv) > 2 and sys.argv[1] == "--only" else None
     cfg = yaml.safe_load(open("config.yml"))["openings"]
+    global TABLE
+    if SOURCE == "elite":
+        from tools.elite_index import build_table
+        TABLE, n_games = build_table(int(os.environ.get("ELITE_MONTHS", "4")))
     sf = chess.engine.SimpleEngine.popen_uci("/usr/games/stockfish")
     sf.configure({"Threads": os.cpu_count(), "Hash": 512})
-    out = {"source": "lichess.org games, 2200+ rated, blitz/rapid/classical",
+    out = {"source": ("Lichess Elite Database (2400+ vs 2200+, no bullet)" if SOURCE == "elite"
+                      else "lichess.org games, 2200+ rated, blitz/rapid/classical"),
            "built": time.strftime("%Y-%m-%d"), "openings": {}}
     summary = ["## Opening book", "", "| Opening | Positions | Deepest ply | Main line |", "|---|---|---|---|"]
     # main openings first so they always get built even if time runs short
