@@ -1,0 +1,21 @@
+# Maia-3 Lichess bot settings. Edit on github.com; changes apply at the next bot start.
+
+maia:
+  model: maia3-79m
+  elo: 2600            # rating Maia imitates (trained range 600-2600)
+  temperature: 0.7     # 0 = always most likely move, 1 = full human randomness
+  top_p: 0.9           # only sample from the most likely moves covering this probability
+
+challenges:
+  variants: [standard]
+  min_base_seconds: 180   # 3+0 minimum
+  max_base_seconds: 900   # 15 min maximum
+  max_increment: 10
+  accept_rated: true
+  accept_casual: true
+  accept_humans: true
+  accept_bots: true
+  max_games: 1            # games at the same time
+
+session:
+  stop_accepting_minutes_before_end: 20

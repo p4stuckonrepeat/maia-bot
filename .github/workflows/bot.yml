@@ -1,0 +1,45 @@
+name: Run bot
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "play = go online on Lichess, check = test only"
+        type: choice
+        options: [play, check]
+        default: play
+      hours:
+        description: "Session length in hours (max 5.5)"
+        default: "5"
+concurrency:
+  group: lichess-bot
+  cancel-in-progress: false
+jobs:
+  bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: maia3-79m
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt git+https://github.com/CSSLab/maia3
+          maia3-cache --model maia3-79m
+      - name: Self-test (offline)
+        run: python -m tests.selftest
+      - name: Bot
+        env:
+          LICHESS_TOKEN: ${{ secrets.LICHESS_TOKEN }}
+        run: |
+          if [ -z "$LICHESS_TOKEN" ]; then echo "::error::Secret LICHESS_TOKEN is missing"; exit 1; fi
+          if [ "${{ inputs.mode }}" = "check" ]; then
+            python -m bot.main --check
+          else
+            python -m bot.main --hours "${{ inputs.hours }}"
+          fi

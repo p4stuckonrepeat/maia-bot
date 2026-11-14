@@ -1,0 +1,228 @@
+"""Maia-3 Lichess bot: accepts challenges and plays them with Maia-3 for one session."""
+import argparse
+import os
+import threading
+import time
+
+import chess
+import yaml
+
+from bot.engine import Maia
+from bot.lichess import Lichess
+
+STANDARD_FEN = chess.STARTING_FEN
+
+
+def log(msg):
+    print(time.strftime("%H:%M:%S"), msg, flush=True)
+
+
+class Bot:
+    def __init__(self, cfg, api, maia, me):
+        self.cfg, self.api, self.maia, self.me = cfg, api, maia, me
+        self.lock = threading.Lock()
+        self.active = set()     # game ids being played
+        self.pending = {}       # challenge id -> accept time (game not started yet)
+        self.accepting = True
+        self.results = []
+
+    # ---------- challenges ----------
+    def decline_reason(self, ch):
+        c = self.cfg["challenges"]
+        tc = ch.get("timeControl", {})
+        if ch.get("variant", {}).get("key") not in c["variants"]:
+            return "variant"
+        if tc.get("type") != "clock":
+            return "timeControl"
+        if tc["limit"] < c["min_base_seconds"]:
+            return "tooFast"
+        if tc["limit"] > c["max_base_seconds"] or tc["increment"] > c["max_increment"]:
+            return "tooSlow"
+        if ch.get("rated") and not c["accept_rated"]:
+            return "casual"
+        if not ch.get("rated") and not c["accept_casual"]:
+            return "rated"
+        is_bot = (ch.get("challenger") or {}).get("title") == "BOT"
+        if is_bot and not c["accept_bots"]:
+            return "noBot"
+        if not is_bot and not c["accept_humans"]:
+            return "onlyBot"
+        with self.lock:
+            now = time.time()
+            for cid in [k for k, v in self.pending.items() if now - v > 60]:
+                del self.pending[cid]
+            if not self.accepting or len(self.active) + len(self.pending) >= c["max_games"]:
+                return "later"
+        return None
+
+    def on_challenge(self, ch):
+        challenger = (ch.get("challenger") or {})
+        if challenger.get("id") == self.me:
+            return  # a challenge we sent
+        reason = self.decline_reason(ch)
+        who = f"{challenger.get('name')} ({challenger.get('rating')})"
+        tc = ch.get("timeControl", {})
+        desc = f"{who} {tc.get('limit', '?')}+{tc.get('increment', '?')} " \
+               f"{'rated' if ch.get('rated') else 'casual'}"
+        if reason:
+            log(f"declined {desc}: {reason}")
+            self.api.decline(ch["id"], reason)
+        elif self.api.accept(ch["id"]):
+            log(f"accepted {desc}")
+            with self.lock:
+                self.pending[ch["id"]] = time.time()
+
+    # ---------- events ----------
+    def event_loop(self):
+        while True:
+            try:
+                for ev in self.api.stream("/api/stream/event"):
+                    t = ev.get("type")
+                    if t == "challenge":
+                        self.on_challenge(ev["challenge"])
+                    elif t in ("challengeCanceled", "challengeDeclined"):
+                        with self.lock:
+                            self.pending.pop(ev["challenge"]["id"], None)
+                    elif t == "gameStart":
+                        g = ev["game"]
+                        gid = g.get("gameId") or g.get("id")
+                        with self.lock:
+                            self.pending.pop(gid, None)
+                            if gid in self.active:
+                                continue
+                            self.active.add(gid)
+                        threading.Thread(target=self.play_game, args=(gid,), daemon=True).start()
+            except Exception as e:
+                log(f"event stream error: {e}")
+            log("event stream closed, reconnecting in 5s")
+            time.sleep(5)
+
+    # ---------- games ----------
+    def play_game(self, gid):
+        color, opp, opp_rating, sent_ply, finished = None, "?", None, -1, False
+        failures = 0
+        log(f"[{gid}] game started")
+        try:
+            while not finished and failures < 30:
+                try:
+                    for ev in self.api.stream(f"/api/bot/game/stream/{gid}"):
+                        failures = 0
+                        t = ev.get("type")
+                        if t == "gameFull":
+                            white, black = ev.get("white", {}), ev.get("black", {})
+                            color = chess.WHITE if white.get("id") == self.me else chess.BLACK
+                            other = black if color == chess.WHITE else white
+                            opp = other.get("name") or f"AI level {other.get('aiLevel')}"
+                            opp_rating = other.get("rating")
+                            fen = ev.get("initialFen", "startpos")
+                            if fen not in ("startpos", STANDARD_FEN):
+                                log(f"[{gid}] non-standard start position, resigning")
+                                self.api._req("POST", f"/api/bot/game/{gid}/resign")
+                                return
+                            state = ev["state"]
+                        elif t == "gameState" and color is not None:
+                            state = ev
+                        else:
+                            continue
+                        if state["status"] not in ("created", "started"):
+                            self.finish(gid, state, color, opp, opp_rating)
+                            finished = True
+                            break
+                        moves = state["moves"].split()
+                        board = chess.Board()
+                        for m in moves:
+                            board.push_uci(m)
+                        if board.turn == color and len(moves) != sent_ply and not board.is_game_over():
+                            move, secs = self.maia.choose(board, opp_rating)
+                            if self.api.move(gid, move.uci()):
+                                sent_ply = len(moves)
+                                log(f"[{gid}] {board.fullmove_number}{'.' if color else '...'}"
+                                    f"{board.san(move)} ({secs:.2f}s)")
+                except Exception as e:
+                    failures += 1
+                    log(f"[{gid}] stream error: {e}")
+                if not finished:
+                    failures += 1
+                    time.sleep(min(10, 1 + failures))
+        finally:
+            with self.lock:
+                self.active.discard(gid)
+            log(f"[{gid}] game thread ended")
+
+    def finish(self, gid, state, color, opp, opp_rating):
+        winner = state.get("winner")
+        if winner is None:
+            result = "draw" if state["status"] in ("draw", "stalemate") else state["status"]
+        else:
+            mine = "white" if color == chess.WHITE else "black"
+            result = "win" if winner == mine else "loss"
+        self.results.append((gid, opp, opp_rating, result, state["status"]))
+        log(f"[{gid}] finished vs {opp} ({opp_rating}): {result} ({state['status']}) "
+            f"https://lichess.org/{gid}")
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--hours", type=float, default=5.0)
+    p.add_argument("--check", action="store_true", help="check token and Maia, do not go online")
+    args = p.parse_args()
+
+    cfg = yaml.safe_load(open("config.yml"))
+    api = Lichess(os.environ["LICHESS_TOKEN"])
+    acc = api.account()
+    me, games_played = acc["id"], acc.get("count", {}).get("all", 0)
+    is_bot = acc.get("title") == "BOT"
+    log(f"Lichess account: {acc['username']} | BOT: {is_bot} | games played: {games_played}")
+
+    if not is_bot and not args.check:
+        if games_played > 0:
+            raise SystemExit("This account has already played games, so Lichess will not make it "
+                             "a BOT account. Create a fresh account and a new token.")
+        ok, msg = api.upgrade_to_bot()
+        log(f"Upgrade to BOT account: {'done' if ok else 'FAILED ' + msg}")
+        if not ok:
+            raise SystemExit(1)
+
+    maia = Maia(cfg["maia"])
+    mv, secs = maia.choose(chess.Board())
+    log(f"Maia-3 ready ({cfg['maia']['model']}, elo {cfg['maia']['elo']}, "
+        f"temp {cfg['maia']['temperature']}, top_p {cfg['maia']['top_p']}): "
+        f"first move {mv} in {secs:.2f}s")
+    if args.check:
+        log("Check finished. Everything works; the bot did not go online.")
+        maia.close()
+        return
+
+    bot = Bot(cfg, api, maia, me)
+    threading.Thread(target=bot.event_loop, daemon=True).start()
+    hours = min(args.hours, 5.6)
+    end = time.time() + hours * 3600
+    stop_accept = end - cfg["session"]["stop_accepting_minutes_before_end"] * 60
+    log(f"Online as https://lichess.org/@/{acc['username']} for {hours:g} h. Waiting for challenges...")
+
+    while True:
+        time.sleep(5)
+        now = time.time()
+        if bot.accepting and now > stop_accept:
+            bot.accepting = False
+            log("Session ending soon: no longer accepting challenges.")
+        with bot.lock:
+            busy = bool(bot.active)
+        if (not bot.accepting and not busy) or now > end - 60:
+            break
+
+    w = sum(r[3] == "win" for r in bot.results)
+    d = sum(r[3] == "draw" for r in bot.results)
+    l = sum(r[3] == "loss" for r in bot.results)
+    log(f"Session over. Games: {len(bot.results)} | W {w} D {d} L {l}")
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary:
+        with open(summary, "a") as f:
+            f.write(f"## Bot session\nGames: {len(bot.results)} | W {w} D {d} L {l}\n\n")
+            for gid, opp, rating, result, status in bot.results:
+                f.write(f"- [{result}] vs {opp} ({rating}), {status}: https://lichess.org/{gid}\n")
+    maia.close()
+
+
+if __name__ == "__main__":
+    main()
