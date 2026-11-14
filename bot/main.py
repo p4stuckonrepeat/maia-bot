@@ -184,13 +184,19 @@ def main():
             raise SystemExit(1)
 
     maia = Maia(cfg["maia"])
+    try:
+        run(cfg, api, maia, acc, me, args)
+    finally:
+        maia.close()
+
+
+def run(cfg, api, maia, acc, me, args):
     mv, secs = maia.choose(chess.Board())
     log(f"Maia-3 ready ({cfg['maia']['model']}, elo {cfg['maia']['elo']}, "
         f"temp {cfg['maia']['temperature']}, top_p {cfg['maia']['top_p']}): "
         f"first move {mv} in {secs:.2f}s")
     if args.check:
         log("Check finished. Everything works; the bot did not go online.")
-        maia.close()
         return
 
     bot = Bot(cfg, api, maia, me)
@@ -221,7 +227,6 @@ def main():
             f.write(f"## Bot session\nGames: {len(bot.results)} | W {w} D {d} L {l}\n\n")
             for gid, opp, rating, result, status in bot.results:
                 f.write(f"- [{result}] vs {opp} ({rating}), {status}: https://lichess.org/{gid}\n")
-    maia.close()
 
 
 if __name__ == "__main__":

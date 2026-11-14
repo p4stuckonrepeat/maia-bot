@@ -66,3 +66,5 @@ b = chess.Board()
 for m in api.moves:
     b.push_uci(m)   # every move legal
 print("SELFTEST PASSED:", chess.Board().variation_san(b.move_stack))
+maia.close()
+faulthandler.cancel_dump_traceback_later()
