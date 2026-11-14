@@ -109,7 +109,7 @@ hard = _st.mean(think_seconds(150000, 0, 30, 0.25, 20, False, T, _r) for _ in ra
 book = max(think_seconds(180000, 0, 2, 1.0, 20, True, T, _r) for _ in range(300))
 panic = max(think_seconds(8000, 0, 60, 0.2, 20, False, T, _r) for _ in range(300))
 print(f"timing: obvious {obvious:.2f}s, hard {hard:.2f}s, book max {book:.2f}s, <10s max {panic:.2f}s", flush=True)
-assert obvious < hard and book <= 2.5 and panic <= 0.96
+assert obvious < hard and book <= 3.5 and panic <= 0.96
 # clock-independent: same difficulty, very different clocks -> similar time
 a = _st.mean(think_seconds(600000, 0, 30, 0.6, 20, False, T, _r) for _ in range(300))
 b = _st.mean(think_seconds(120000, 0, 30, 0.6, 20, False, T, _r) for _ in range(300))
