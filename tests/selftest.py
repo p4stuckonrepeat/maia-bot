@@ -135,9 +135,10 @@ assert abs(a - b) < 1.0
 # Search test: after 3...Nf6?? the calculation sees Qxf7# (value for Black = 0).
 from bot.search import Search
 sr = Search(maia)
-b.push(blunder)
-v_white = sr.value(b, 1, (2600, 2600), [3])
-b.pop()
+sb = chess.Board()
+for m in ["e2e4", "e7e5", "d1h5", "b8c6", "f1c4", "g8f6"]:
+    sb.push_uci(m)
+v_white = sr.value(sb, 1, (2600, 2600), [3])
 print("search test: value of 3...Nf6 for Black =", round(1 - v_white, 2), flush=True)
 assert 1 - v_white < 0.05
 import time as _t
