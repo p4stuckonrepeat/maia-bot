@@ -38,11 +38,14 @@ class Bot:
         tc = ch.get("timeControl", {})
         if ch.get("variant", {}).get("key") not in c["variants"]:
             return "variant"
-        if tc.get("type") != "clock":
+        if tc.get("type") == "unlimited":
+            if not c.get("accept_unlimited", False):
+                return "timeControl"
+        elif tc.get("type") != "clock":
             return "timeControl"
-        if tc["limit"] < c["min_base_seconds"]:
+        elif tc["limit"] < c["min_base_seconds"]:
             return "tooFast"
-        if tc["limit"] > c["max_base_seconds"] or tc["increment"] > c["max_increment"]:
+        elif tc["limit"] > c["max_base_seconds"] or tc["increment"] > c["max_increment"]:
             return "tooSlow"
         if ch.get("rated") and not c["accept_rated"]:
             return "casual"
@@ -68,7 +71,7 @@ class Bot:
         reason = self.decline_reason(ch)
         who = f"{challenger.get('name')} ({challenger.get('rating')})"
         tc = ch.get("timeControl", {})
-        desc = f"{who} {tc.get('limit', '?')}+{tc.get('increment', '?')} " \
+        desc = f"{who} {'unlimited' if tc.get('type') == 'unlimited' else str(tc.get('limit', '?')) + '+' + str(tc.get('increment', '?'))} " \
                f"{'rated' if ch.get('rated') else 'casual'}"
         if reason:
             log(f"declined {desc}: {reason}")

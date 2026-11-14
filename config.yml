@@ -48,6 +48,7 @@ challenges:
   min_base_seconds: 180   # 3+0 minimum
   max_base_seconds: 900   # 15 min maximum
   max_increment: 10
+  accept_unlimited: true  # games without a clock
   accept_rated: true
   accept_casual: true
   accept_humans: true

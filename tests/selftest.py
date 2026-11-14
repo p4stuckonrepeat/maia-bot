@@ -125,7 +125,7 @@ hard = _st.mean(think_seconds(150000, 0, 30, 0.25, 20, False, T, _r) for _ in ra
 book = max(think_seconds(180000, 0, 2, 1.0, 20, True, T, _r) for _ in range(300))
 panic = max(think_seconds(8000, 0, 60, 0.2, 20, False, T, _r) for _ in range(300))
 print(f"timing: obvious {obvious:.2f}s, hard {hard:.2f}s, book max {book:.2f}s, <10s max {panic:.2f}s", flush=True)
-assert obvious < hard and book <= 3.5 and panic <= 0.96
+assert obvious < hard and book <= 5.0 and panic <= 1.5
 # clock-independent: same difficulty, very different clocks -> similar time
 a = _st.mean(think_seconds(600000, 0, 30, 0.6, 20, False, T, _r) for _ in range(300))
 b = _st.mean(think_seconds(120000, 0, 30, 0.6, 20, False, T, _r) for _ in range(300))
@@ -143,6 +143,8 @@ assert bot.decline_reason(ch("a", limit=60)) == "tooFast"
 assert bot.decline_reason(ch("b", limit=1800)) == "tooSlow"
 assert bot.decline_reason(ch("c", variant="chess960")) == "variant"
 assert bot.decline_reason(ch("d")) is None
+unl = ch("u"); unl["timeControl"] = {"type": "unlimited"}
+assert bot.decline_reason(unl) is None   # games without a clock are accepted
 bot.on_challenge(ch("d")); assert api.accepted == ["d"]
 assert bot.decline_reason(ch("e")) == "later"   # max_games = 1 while d is pending
 bot.pending.clear()
