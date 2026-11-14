@@ -96,6 +96,17 @@ b1 = chess.Board("r1bq1rk1/pppp1ppp/2n2n2/2b1p3/2B1P3/3P1N2/PPP2PPP/RNBQ1RK1 w -
 assert positional_score(b1, chess.Move.from_uci("g2g4")) < positional_score(b1, chess.Move.from_uci("c2c3"))
 b2 = chess.Board("rnbqkbnr/ppp2ppp/8/3pp3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 3")
 assert positional_score(b2, chess.Move.from_uci("f3g5")) < 0       # hangs the knight to Qd8
+# Plan tests: undoing the last move is discouraged; continuing a kingside pawn push is rewarded.
+from bot.style import plan_score
+pb = chess.Board()
+for m in ["e2e4", "e7e5", "g1f3", "b8c6", "f3g5", "d7d5"]:
+    pb.push_uci(m)
+assert plan_score(pb, chess.Move.from_uci("g5f3")) < 0
+pb2 = chess.Board("r1bq1rk1/pppp1ppp/2n2n2/2b1p3/2B1P3/2NP1N2/PPP2PPP/R1BQK2R w KQ - 0 6")
+for m in ["h2h3", "d7d6", "g2g4", "c8e6"]:
+    pb2.push_uci(m)
+assert plan_score(pb2, chess.Move.from_uci("g4g5")) > plan_score(pb2, chess.Move.from_uci("a2a3"))
+print("plan tests ok", flush=True)
 styled = [maia.choose_styled(chess.Board(), cfg["maia"], cfg["style"], 2000)[0] for _ in range(20)]
 assert all(m in chess.Board().legal_moves for m in styled)
 print("style tests ok:", sorted(set(m.uci() for m in styled)), flush=True)

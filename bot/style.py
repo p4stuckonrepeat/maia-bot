@@ -20,6 +20,40 @@ def pawn_weaknesses(board, color):
     return doubled + isolated
 
 
+def zone(square):
+    f = chess.square_file(square)
+    return 0 if f <= 2 else (1 if f <= 4 else 2)   # queenside / centre / kingside
+
+
+def plan_score(board, move):
+    """Reward moves that continue the bot's own recent moves (one coherent idea)."""
+    stack = board.move_stack
+    mine = [stack[i] for i in range(len(stack) - 2, -1, -2)][:3]   # our last 3 moves, newest first
+    if not mine:
+        return 0.0
+    color, piece = board.turn, board.piece_type_at(move.from_square)
+    score, last = 0.0, mine[0]
+    if move.from_square == last.to_square and move.to_square == last.from_square:
+        score -= 0.4                                   # don't undo the previous move
+    zones = [zone(m.to_square) for m in mine]
+    focus = max(set(zones), key=zones.count)
+    if zones.count(focus) >= 2 and zone(move.to_square) == focus:
+        score += 0.15                                  # keep playing on the same part of the board
+    if piece == chess.PAWN:
+        prev_pawn_wings = [zone(m.to_square) for m in mine[:2]
+                           if board.piece_type_at(m.to_square) == chess.PAWN]
+        if zone(move.to_square) in prev_pawn_wings and zone(move.to_square) != 1:
+            score += 0.15                              # continue a pawn expansion on that wing
+    board.push(move)
+    try:
+        if board.piece_at(last.to_square) and board.piece_at(last.to_square).color == color \
+                and last.to_square in board.attacks(move.to_square):
+            score += 0.1                               # support the piece moved last
+    finally:
+        board.pop()
+    return score
+
+
 def positional_score(board, move):
     color, piece = board.turn, board.piece_type_at(move.from_square)
     score = 0.0
@@ -59,7 +93,7 @@ def positional_score(board, move):
                 score -= 0.4                           # don't leave pieces hanging
     finally:
         board.pop()
-    return score
+    return score + plan_score(board, move)
 
 
 STYLES = {"positional": positional_score}
