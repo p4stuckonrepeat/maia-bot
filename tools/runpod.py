@@ -36,7 +36,7 @@ def rp(method, url, body=None):
 def start(name, extra):
     script = ("set -e; cd /workspace; git clone --depth 1 https://github.com/" + REPO + " repo; cd repo; "
               "pip install -q chess python-chess huggingface-hub numpy pyyaml requests; "
-              "pip install -q --no-deps git+https://github.com/CSSLab/maia3@1e13597c42d4858b7cfd7cfdae01e297263364b2; "
+              "pip install -q git+https://github.com/CSSLab/maia3@1e13597c42d4858b7cfd7cfdae01e297263364b2; "
               "maia3-cache --model maia3-79m; "
               "python -u -m tal.cloud_parallel 2>&1 | tee /workspace/train.log; sleep infinity")
     env = {"GH_TOKEN": os.environ["GH_TOKEN"], "REPO": REPO, **extra}
