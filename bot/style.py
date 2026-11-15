@@ -264,3 +264,62 @@ def tal_learned_logit(board, cand, rules_file="tal/tal-rules.json"):
 
 
 STYLES["tal_learned"] = lambda board, move, exp=None: 0.0   # handled in Maia.choose_styled
+
+
+# --- Tal plans: classic middlegame theory as a light tie-breaker between Maia's natural moves ---
+# 1. Improve your worst piece (Tarrasch / Dvoretsky): a move that frees the least active piece.
+# 2. Open the position with pawn breaks (Tal): a pawn move that challenges an enemy pawn, more so
+#    in the centre and towards the enemy king, especially when it frees a hemmed-in bishop.
+# 3. Bring pieces to the enemy king (Tal): more pressure on the squares around it.
+
+def _activity(board, sq):
+    return len(board.attacks(sq))
+
+
+def _worst_piece(board, color):
+    worst, wa = None, 99
+    for sq in board.pieces(chess.KNIGHT, color) | board.pieces(chess.BISHOP, color) | board.pieces(chess.ROOK, color):
+        a = _activity(board, sq)
+        if a < wa:
+            worst, wa = sq, a
+    return worst, wa
+
+
+def _king_pressure(board, color):
+    k = board.king(not color)
+    if k is None:
+        return 0
+    zone_sqs = chess.SquareSet(chess.BB_KING_ATTACKS[k] | chess.BB_SQUARES[k])
+    return sum(len(board.attackers(color, sq)) for sq in zone_sqs)
+
+
+def tal_plan_score(board, move):
+    me = board.turn
+    score = 0.0
+    worst, wa = _worst_piece(board, me)
+    kp_before = _king_pressure(board, me)
+    piece = board.piece_at(move.from_square)
+    b = board.copy(stack=False)
+    b.push(move)
+    # 1. worst piece: moved to a better square, or its lines opened by the move
+    if worst is not None and wa <= 4:
+        new_sq = move.to_square if move.from_square == worst else worst
+        if b.piece_at(new_sq) and b.piece_at(new_sq).color == me:
+            gain = _activity(b, new_sq) - wa
+            if gain > 0:
+                score += min(gain, 6) / 6.0
+    # 2. pawn breaks: the pawn now attacks an enemy pawn (centre / king side count more)
+    if piece and piece.piece_type == chess.PAWN and not board.is_capture(move):
+        hits = [sq for sq in b.attacks(move.to_square) if b.piece_at(sq) and
+                b.piece_at(sq).piece_type == chess.PAWN and b.piece_at(sq).color != me]
+        if hits:
+            f = chess.square_file(move.to_square)
+            score += 0.5 + (0.3 if f in (2, 3, 4, 5) else 0)
+            k = board.king(not me)
+            if k is not None and abs(chess.square_file(k) - f) <= 2:
+                score += 0.3
+    # 3. king pressure
+    gain = _king_pressure(b, me) - kp_before
+    if gain > 0:
+        score += min(gain, 3) * 0.2
+    return score

@@ -167,6 +167,16 @@ ftop = maia.choose(fl, cfg["maia"], candidates=10)[1]
 bm, bn = guard.assist(fl, ftop[0]["move"], ftop, bcfg)
 print("brilliant test:", fl.san(bm), "|", bn, "| candidates:", [fl.san(c["move"]) for c in ftop], flush=True)
 
+# Tal plans: in the user's game (Black, move 16) the hemmed-in Bb7 should be the worst piece,
+# and pawn breaks / freeing moves should score.
+from bot.style import tal_plan_score, _worst_piece
+tp = chess.Board()
+for m in "e4 c5 Nf3 d6 g3 Nf6 d3 g6 Bg2 Bg7 O-O O-O c3 Nc6 h3 Rb8 Re1 b5 Nbd2 b4 c4 Ne8 Nf1 Nc7 Qc2 Ne6 Be3 Bb7 Rad1 a5 b3".split():
+    tp.push_san(m)
+wsq, wact = _worst_piece(tp, tp.turn)
+plans = sorted(((round(tal_plan_score(tp, m), 2), tp.san(m)) for m in tp.legal_moves), reverse=True)[:10]
+print("plan test: worst piece", tp.piece_at(wsq).symbol(), chess.square_name(wsq), wact, "| best by plan:", plans, flush=True)
+
 # Calculation (Leela-style, Maia only): the natural-looking 3...Nf6?? must be changed (Qxf7#).
 from bot.mcts import MCTS
 mc = MCTS(maia)

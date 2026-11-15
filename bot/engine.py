@@ -53,6 +53,13 @@ class Maia:
             from bot.style import tal_learned_logit
             rules = style_cfg.get("rules_file", "tal/tal-rules.json")
             logits = [tal_learned_logit(board, c, rules) for c in top]
+            pcfg = style_cfg.get("plans", {})
+            if pcfg.get("enabled"):   # classic theory as a tie-breaker, only between natural moves
+                from bot.style import tal_plan_score
+                rel = float(pcfg.get("min_relative_prob", 0.25)) * top[0]["policy"]
+                ps = float(pcfg.get("strength", 1.0))
+                logits = [l + (ps * tal_plan_score(board, c["move"]) if c["policy"] >= rel else 0.0)
+                          for l, c in zip(logits, top)]
             temp = max(0.05, float(maia_cfg["temperature"]))
             mx = max(logits)
             weights = [math.exp((l - mx) / temp) for l in logits]

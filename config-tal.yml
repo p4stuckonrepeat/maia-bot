@@ -44,6 +44,10 @@ style:                 # consistent playing style (one "person" across games)
   strength: 2.0        # 0 = pure Maia, 1 = noticeable, 2+ = very consistent / predictable
   candidates: 12       # Maia's moves the Tal rules choose between
   min_relative_prob: 0.25 # rules may pick moves at least a quarter as likely as Maia's top choice
+  plans:               # classic theory between natural moves: free the worst piece, pawn breaks, go for the king
+    enabled: true
+    strength: 1.0      # 0 = off, 1 = a clear nudge, 2 = strong
+    min_relative_prob: 0.25  # only moves at least a quarter as likely as Maia's top choice
 
 timing:                # human-like thinking time, based only on the move (not on the clock)
   enabled: true
