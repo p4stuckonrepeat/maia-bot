@@ -9,6 +9,12 @@ on:
       months:
         description: "Months of Elite Database games to use"
         default: "4"
+      config:
+        description: "Config file with the openings section"
+        default: "config.yml"
+      out:
+        description: "Output book file"
+        default: "book.json"
 permissions:
   contents: write
 jobs:
@@ -29,20 +35,22 @@ jobs:
           BOOK_SOURCE: elite
           ELITE_MONTHS: ${{ inputs.test && '1' || inputs.months }}
           BOOK_BUDGET_SCALE: ${{ inputs.test && '0.02' || '1' }}
+          BOOK_CONFIG: ${{ inputs.config }}
+          BOOK_OUT: ${{ inputs.out }}
         run: python -u -m tools.build_book
       - uses: actions/upload-artifact@v4
         with:
           name: book
-          path: book.json
+          path: ${{ inputs.out }}
       - name: Save book.json to the repo
         if: ${{ !inputs.test }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          cp book.json /tmp/book.json
+          cp "${{ inputs.out }}" /tmp/book.json
           git fetch origin ${{ github.ref_name }}
           git reset --hard origin/${{ github.ref_name }}
-          cp /tmp/book.json book.json
-          git add book.json
+          cp /tmp/book.json "${{ inputs.out }}"
+          git add "${{ inputs.out }}"
           git commit -m "Rebuild opening book (Elite Database)" || echo "no changes"
           git push

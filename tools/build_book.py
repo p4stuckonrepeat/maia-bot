@@ -192,7 +192,7 @@ def main():
     if len(sys.argv) > 2 and sys.argv[1] == "--merge":
         return merge(sys.argv[2:])
     only = sys.argv[2] if len(sys.argv) > 2 and sys.argv[1] == "--only" else None
-    cfg = yaml.safe_load(open("config.yml"))["openings"]
+    cfg = yaml.safe_load(open(os.environ.get("BOOK_CONFIG", "config.yml")))["openings"]
     global TABLE
     if SOURCE == "elite":
         from tools.elite_index import build_table
@@ -217,7 +217,7 @@ def main():
         json.dump(out, open(f"part-{only}.json", "w"), separators=(",", ":"))
         print(summary[-1], f"| requests {requests_made}, {(time.time() - start) / 60:.0f} min")
         return
-    json.dump(out, open("book.json", "w"), separators=(",", ":"))
+    json.dump(out, open(os.environ.get("BOOK_OUT", "book.json"), "w"), separators=(",", ":"))
     summary.append(f"\nExplorer requests: {requests_made}, time {(time.time() - start) / 60:.0f} min")
     text = "\n".join(summary)
     print(text)

@@ -76,23 +76,20 @@ session:
   stop_accepting_minutes_before_end: 20
 
 openings:
-  # weight > 0 = preferred (chosen by weight). weight 0 = only used when no preferred
-  # opening fits the game (e.g. after the opponent's first move). Lines: our moves and the
-  # opponent's moves in order; "*" = any common opponent move. Deep lines live in book.json.
+  # Attacking repertoire for the Tal profile (open, sharp positions). weight 0 = only as fallback.
   white:
-    ruy_lopez:           {weight: 100, line: "e2e4 e7e5 g1f3 b8c6 f1b5", budget: 1000}
-    italian:             {weight: 0, line: "e2e4 e7e5 g1f3 b8c6 f1c4", budget: 60}
-    queens_gambit:       {weight: 0, line: "d2d4 d7d5 c2c4", budget: 60}
-    london:              {weight: 0, line: "d2d4 * c1f4", budget: 60}
-    english:             {weight: 0, line: "c2c4", budget: 60}
-    kings_indian_attack: {weight: 0, line: "g1f3 * g2g3 * f1g2", budget: 60}
+    open_sicilian:   {weight: 100, line: "e2e4 c7c5 g1f3 * d2d4", budget: 700}
+    scotch:          {weight: 100, line: "e2e4 e7e5 g1f3 b8c6 d2d4", budget: 400}
+    french_nc3:      {weight: 100, line: "e2e4 e7e6 d2d4 d7d5 b1c3", budget: 400}
+    caro_advance:    {weight: 100, line: "e2e4 c7c6 d2d4 d7d5 e4e5", budget: 300}
+    pirc_150_attack: {weight: 100, line: "e2e4 d7d6 d2d4 g8f6 b1c3 g7g6 c1e3", budget: 200}
+    e4_other:        {weight: 0, line: "e2e4", budget: 150}
   black:
-    sicilian:            {weight: 100, line: "e2e4 c7c5", budget: 1000}
-    caro_kann:           {weight: 0, line: "e2e4 c7c6", budget: 60}
-    french:              {weight: 0, line: "e2e4 e7e6", budget: 60}
-    e5_and_ruy_lopez:    {weight: 0, line: "e2e4 e7e5", budget: 150}
-    kings_indian:        {weight: 100, line: "d2d4 g8f6 * g7g6 * f8g7 * d7d6", budget: 700}
-    queens_gambit_declined: {weight: 0, line: "d2d4 d7d5 c2c4 e7e6", budget: 60}
+    sicilian:        {weight: 100, line: "e2e4 c7c5", budget: 800}
+    modern_benoni:   {weight: 100, line: "d2d4 g8f6 c2c4 c7c5 d4d5 e7e6", budget: 500}
+    kings_indian:    {weight: 100, line: "d2d4 g8f6 * g7g6 * f8g7 * d7d6", budget: 400}
+    kid_vs_c4:       {weight: 100, line: "c2c4 g8f6 * g7g6 * f8g7", budget: 200}
+    kid_vs_nf3:      {weight: 100, line: "g1f3 g8f6 * g7g6 * f8g7", budget: 200}
   book:
     enabled: true
-    path: book-tal.json   # Tal's own openings from his games
+    path: book-tal-rep.json   # attacking repertoire built from 2400+ games (Tal's own book: book-tal.json)
