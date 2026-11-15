@@ -104,7 +104,7 @@ challenges:
   accept_rated: true
   accept_casual: true
   accept_humans: true
-  accept_bots: true
+  accept_bots: false     # only humans who challenge it
   max_games: 1            # games at the same time
 
 session:
@@ -130,7 +130,7 @@ openings:
     path: book-tal-rep.json   # attacking repertoire built from 2400+ games (Tal's own book: book-tal.json)
 
 matchmaking:           # when idle, challenge other Lichess bots (to measure the real rating)
-  enabled: true
+  enabled: false
   rated: true
   speed: blitz
   limit: 180           # 3+2
