@@ -68,7 +68,24 @@ def download_lichess(user, speeds):
     return r.text
 
 
+def download_group(names):
+    parts = []
+    for n in names:
+        url = f"https://www.pgnmentor.com/players/{n}.zip"
+        try:
+            r = requests.get(url, timeout=120, headers={"User-Agent": "Mozilla/5.0"})
+            r.raise_for_status()
+            with zipfile.ZipFile(io.BytesIO(r.content)) as z:
+                parts += [z.read(x).decode("latin-1") for x in z.namelist() if x.lower().endswith(".pgn")]
+            log(f"downloaded {n}")
+        except Exception as e:
+            log(f"skipped {n}: {e}")
+    return "\n".join(parts)
+
+
 def download_games():
+    if PLAYER.startswith("group:"):
+        return download_group(PLAYER.split(":", 1)[1].split(","))
     if PLAYER.startswith("chesscom:"):
         _, user, classes = PLAYER.split(":")
         return download_chesscom(user, classes.split(","))
@@ -95,6 +112,20 @@ def tal_games(text):
         if g is None:
             break
         w, b = g.headers.get("White", ""), g.headers.get("Black", "")
+        if PLAYER.startswith("group:"):
+            names = PLAYER.split(":", 1)[1].split(",")
+            sides = [c for c, nm in ((chess.WHITE, w), (chess.BLACK, b))
+                     if any(re.match(rf"^{x}\b", nm) for x in names)]
+            if not sides or g.headers.get("Variant") or g.headers.get("SetUp") == "1":
+                continue
+            moves = [m.uci() for m in g.mainline_moves()]
+            if len(moves) < 10:
+                continue
+            for c in sides:
+                games.append({"moves": moves, "tal": c, "result": g.headers.get("Result", "*")})
+            if MAX_GAMES and len(games) >= MAX_GAMES:
+                break
+            continue
         if ":" in PLAYER:
             user = PLAYER.split(":")[1].lower()
             is_w, is_b = w.lower() == user, b.lower() == user
@@ -219,11 +250,14 @@ def main():
     eng = Maia3UCIEngine(parse_args(["--model", "maia3-79m", "--device", DEVICE]))
     eng.ensure_model_loaded()
     model = eng.model
+    enc = Encoder(eng)
+    base_normal = None
     if os.environ.get("TAL_RESUME") and os.path.exists(os.environ["TAL_RESUME"]):
+        base_normal = accuracy(model, enc, hold, s_hold)
+        log(f"normal Maia on this player's held-out moves: {base_normal:.1%}")
         ck = torch.load(os.environ["TAL_RESUME"], map_location=DEVICE)
         model.load_state_dict(ck["model_state_dict"])
         log("resumed from", os.environ["TAL_RESUME"], ck.get("info"))
-    enc = Encoder(eng)
 
     t0 = time.time()
     base = accuracy(model, enc, hold, s_hold)
@@ -287,7 +321,9 @@ def main():
     info = {"before": base, "after": after, "positions_trained": seen, "epochs": seen / len(s_train),
             "positions_per_s": rate, "train_moves": len(s_train), "games": len(games)}
     log(f"held-out player move match AFTER training: {after:.1%} (before {base:.1%})")
-    info["improved"] = after > base
+    if base_normal is not None:
+        info["before_resume"], info["before"] = base, base_normal   # compare against normal Maia
+    info["improved"] = after > info["before"]
     info["player"] = PLAYER
     torch.save({"model_state_dict": {k: v.cpu() for k, v in model.state_dict().items()}, "info": info}, OUT)
     json.dump(info, open("tal-info.json", "w"), indent=1)

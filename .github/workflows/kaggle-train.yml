@@ -21,6 +21,11 @@ on:
         default: "2"
       lr:
         default: "5e-6"
+      pretrain_player:
+        description: "Optional: first train on these players (e.g. group:Kasparov,Shirov), then on the player"
+        default: ""
+      pretrain_epochs:
+        default: "1"
 permissions:
   contents: write
 jobs:
@@ -56,6 +61,15 @@ jobs:
                              "TAL_BATCH": "128", "TAL_EVAL_EVERY": "1500",
                              "TAL_OUT": "/kaggle/working/${{ inputs.name }}-79m.pt"})
           os.chdir("repo")
+          pre = "${{ inputs.pretrain_player }}"
+          if pre:
+              base_env = dict(os.environ)
+              os.environ.update({"PLAYER": pre, "PLAYER_MAX_GAMES": "0", "TAL_EPOCHS": "${{ inputs.pretrain_epochs }}",
+                                 "TAL_OUT": "/kaggle/working/pretrain-79m.pt", "TAL_EVAL": "1000"})
+              sh("python -u -m tal.train")
+              shutil.copy("tal-info.json", "/kaggle/working/pretrain-info.json")
+              os.environ.clear(); os.environ.update(base_env)
+              os.environ["TAL_RESUME"] = "/kaggle/working/pretrain-79m.pt"
           sh("python -u -m tal.train")
           shutil.copy("tal-info.json", "/kaggle/working/${{ inputs.name }}-info.json")
           PY
