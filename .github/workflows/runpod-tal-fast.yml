@@ -1,0 +1,83 @@
+name: "Tal: fast parallel training on RunPod"
+on:
+  workflow_dispatch:
+    inputs:
+      pre_minutes:
+        description: "Minutes of training on similar-style players"
+        default: "50"
+permissions:
+  contents: write
+concurrency: runpod-tal-fast
+env:
+  RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+  GH_TOKEN: ${{ github.token }}
+  GH_REPO: ${{ github.repository }}
+  CURRENT_BEST: "0.594"
+jobs:
+  pretrain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+      - name: Start GPU
+        run: echo "POD=$(python3 tools/runpod.py start pretrain PLAN_MODE=pretrain PRE_MINUTES=${{ inputs.pre_minutes }})" >> "$GITHUB_ENV"
+      - name: Wait
+        run: python3 tools/runpod.py wait "$POD" tal-runs pretrain-info.json 100
+      - name: Shut the GPU down (always)
+        if: always()
+        run: '[ -n "$POD" ] && python3 tools/runpod.py stop "$POD" || echo "no pod"'
+      - name: Check
+        run: |
+          gh release download tal-runs -p pretrain-info.json --clobber && cat pretrain-info.json
+          python3 -c "import json,sys; d=json.load(open('pretrain-info.json')); sys.exit('pretrain failed: '+d['error'] if 'error' in d else 0)"
+  variant:
+    needs: pretrain
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        name: [pre_b8_lr5e-6, pre_b4_lr1e-5, pre_all_lr3e-6]
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+      - name: Start GPU
+        run: echo "POD=$(python3 tools/runpod.py start ${{ matrix.name }} PLAN_MODE=variant PLAN_VARIANT=${{ matrix.name }})" >> "$GITHUB_ENV"
+      - name: Wait
+        run: python3 tools/runpod.py wait "$POD" tal-runs ${{ matrix.name }}.json 70
+      - name: Shut the GPU down (always)
+        if: always()
+        run: '[ -n "$POD" ] && python3 tools/runpod.py stop "$POD" || echo "no pod"'
+  pick:
+    needs: variant
+    if: always() && needs.variant.result != 'skipped'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pick the best Tal model
+        run: |
+          gh release download tal-runs -p '*.json' --clobber || true
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json, glob, os
+          rows = {}
+          for f in glob.glob("pre_*.json"):
+              rows[f[:-5]] = json.load(open(f))
+          print("## Tal parallel training\n| Variant | GPU | Normal Maia | After |\n|---|---|---|---|")
+          for k, v in rows.items():
+              if "after" in v:
+                  print(f"| {k} | {v.get('gpu')} | {v['before']:.1%} | {v['after']:.1%} |")
+              else:
+                  print(f"| {k} | {v.get('gpu')} | error | {v.get('error','')[:80]} |")
+          ok = {k: v for k, v in rows.items() if "after" in v}
+          best = max(ok, key=lambda k: ok[k]["after"]) if ok else ""
+          save = bool(best) and ok[best]["after"] > float(os.environ["CURRENT_BEST"])
+          print(f"\nBest: {best or 'none'} - beats current {float(os.environ['CURRENT_BEST']):.1%}: {save}")
+          open(os.environ["GITHUB_ENV"], "a").write(f"BEST={best if save else ''}\n")
+          PY
+      - name: Save as the Tal model
+        if: env.BEST != ''
+        run: |
+          gh release download tal-runs -p "$BEST.pt" --clobber
+          mv "$BEST.pt" tal-79m.pt && cp "$BEST.json" tal-info.json
+          gh release upload tal-model tal-79m.pt tal-info.json --clobber
+          echo "saved $BEST as tal-79m.pt" | tee -a "$GITHUB_STEP_SUMMARY"
