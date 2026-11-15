@@ -7,6 +7,8 @@ refutes are dropped; among the rest the bot chooses naturally, weighted by Maia.
 """
 import random
 
+import chess
+
 
 def expected(wdl):
     w, d, _ = wdl
