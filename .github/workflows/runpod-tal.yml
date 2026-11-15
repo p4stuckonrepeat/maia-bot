@@ -41,10 +41,17 @@ jobs:
                             "args": "bash -c " + json.dumps(sys.argv[1])}))
           PY
           )
-          R=$(curl -sS -X POST https://api.runpod.io/v2/pods -H "Authorization: Bearer $RUNPOD_API_KEY" -H "Content-Type: application/json" -d "$BODY")
-          echo "$R" | python3 -c "import json,sys; d=json.load(sys.stdin); print({k: d.get(k) for k in ('id','status','cost','error','message')})"
-          ID=$(echo "$R" | python3 -c "import json,sys; print(json.load(sys.stdin).get('id',''))")
-          if [ -z "$ID" ]; then echo "::error::Could not start a GPU: $R"; exit 1; fi
+          ID=""
+          for C in "$CLOUD" COMMUNITY SECURE; do
+            for G in "$GPU" "NVIDIA GeForce RTX 4090" "NVIDIA GeForce RTX 3090" "NVIDIA A40" "NVIDIA RTX A6000" "NVIDIA RTX A5000" "NVIDIA L40S" "NVIDIA RTX 6000 Ada Generation"; do
+              B=$(echo "$BODY" | G="$G" C="$C" python3 -c "import json,sys,os; d=json.load(sys.stdin); d['gpu']['id']=os.environ['G']; d['cloud']=os.environ['C']; print(json.dumps(d))")
+              R=$(curl -sS -X POST https://api.runpod.io/v2/pods -H "Authorization: Bearer $RUNPOD_API_KEY" -H "Content-Type: application/json" -d "$B")
+              ID=$(echo "$R" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('id') or '')" 2>/dev/null || true)
+              if [ -n "$ID" ]; then echo "started $G on $C: $(echo "$R" | python3 -c "import json,sys; d=json.load(sys.stdin); print({k: d.get(k) for k in ('id','status','costPerHr','cost')})")"; break 2; fi
+              echo "not available: $G ($C) -> $(echo "$R" | head -c 200)"
+            done
+          done
+          if [ -z "$ID" ]; then echo "::error::No GPU free right now, try again later"; exit 1; fi
           echo "POD=$ID" >> "$GITHUB_ENV"
         env:
           GPU: ${{ inputs.gpu }}
