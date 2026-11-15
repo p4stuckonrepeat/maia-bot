@@ -130,7 +130,10 @@ def main():
     torch.set_num_threads(os.cpu_count())
     minutes = float(os.environ.get("TAL_MINUTES", "30"))
     epochs = float(os.environ.get("TAL_EPOCHS", "2"))
-    lr = float(os.environ.get("TAL_LR", "2e-5"))
+    lr = float(os.environ.get("TAL_LR", "5e-6"))
+    train_blocks = int(os.environ.get("TAL_TRAIN_BLOCKS", "2"))   # only the last N transformer blocks + heads
+    value_w = float(os.environ.get("TAL_VALUE_WEIGHT", "0.1"))
+    eval_every = int(os.environ.get("TAL_EVAL_EVERY", "400"))
     bs = int(os.environ.get("TAL_BATCH", "32"))
     eval_n = int(os.environ.get("TAL_EVAL", "3000"))
 
@@ -158,7 +161,20 @@ def main():
     base = accuracy(model, enc, hold, s_hold)
     log(f"held-out Tal move match BEFORE training: {base:.1%} ({time.time() - t0:.0f}s)")
 
-    opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=0.01)
+    # Train only the top of the network: Tal's style on top of Maia's general chess knowledge.
+    n_blocks = len(model.transformer.layers)
+    for name, p in model.named_parameters():
+        mt = re.match(r"transformer\.layers\.(\d+)\.", name)
+        frozen = name.startswith(("token_projection", "elo_embedding", "gab_shared", "abs_pe")) or \
+            (mt is not None and int(mt.group(1)) < n_blocks - train_blocks)
+        p.requires_grad = not frozen
+    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    log(f"training the last {train_blocks} of {n_blocks} blocks + heads: {trainable / 1e6:.1f}M parameters")
+    quick = s_hold[:800]
+    best_acc = accuracy(model, enc, hold, quick)
+    best_state = {k: v.detach().clone() for k, v in model.state_dict().items()}
+    log(f"quick eval (800 positions) at start: {best_acc:.1%}")
+    opt = torch.optim.AdamW([p for p in model.parameters() if p.requires_grad], lr=lr, weight_decay=0.01)
     total_steps = int(len(s_train) * epochs / bs)
     deadline, step, seen, t_start = time.time() + minutes * 60, 0, 0, time.time()
     model.train()
@@ -172,7 +188,7 @@ def main():
             loss = F.cross_entropy(lm, y)
             keep = v >= 0
             if keep.any():
-                loss = loss + 0.25 * F.cross_entropy(lv[keep], v[keep])
+                loss = loss + value_w * F.cross_entropy(lv[keep], v[keep])
             opt.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
@@ -183,11 +199,22 @@ def main():
                 rate = seen / (time.time() - t_start)
                 log(f"step {step}/{total_steps} loss {loss.item():.3f} | {rate:.1f} positions/s | "
                     f"epoch {seen / len(s_train):.2f}")
+            if step % eval_every == 0:
+                acc = accuracy(model, enc, hold, quick)
+                model.train()
+                if acc > best_acc:
+                    best_acc, best_state = acc, {k: v.detach().clone() for k, v in model.state_dict().items()}
+                log(f"quick eval at step {step}: {acc:.1%} (best {best_acc:.1%})")
     rate = seen / max(1, time.time() - t_start)
+    acc = accuracy(model, enc, hold, quick)
+    if acc > best_acc:
+        best_acc, best_state = acc, {k: v.detach().clone() for k, v in model.state_dict().items()}
+    model.load_state_dict(best_state)   # keep the best version seen during training
     after = accuracy(model, enc, hold, s_hold)
     info = {"before": base, "after": after, "positions_trained": seen, "epochs": seen / len(s_train),
             "positions_per_s": rate, "train_moves": len(s_train), "games": len(games)}
     log(f"held-out Tal move match AFTER training: {after:.1%} (before {base:.1%})")
+    info["improved"] = after > base
     torch.save({"model_state_dict": model.state_dict(), "info": info}, OUT)
     json.dump(info, open("tal-info.json", "w"), indent=1)
     hours_epoch = len(s_train) / rate / 3600

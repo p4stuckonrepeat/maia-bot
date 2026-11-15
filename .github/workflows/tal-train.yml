@@ -45,10 +45,11 @@ jobs:
           TAL_MINUTES: ${{ inputs.minutes }}
           TAL_RESUME: prev/tal-79m.pt
         run: python -u -m tal.train
-      - name: Save as release
+      - name: Save as release (only if it predicts Tal better than before)
         if: ${{ inputs.save }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          python3 -c "import json,sys; sys.exit(0 if json.load(open('tal-info.json'))['improved'] else 1)" || { echo "Not better than before - not saved"; exit 0; }
           gh release view tal-model >/dev/null 2>&1 || gh release create tal-model --title "Tal model" --notes "Maia-3 79M fine-tuned on Mikhail Tal's games"
           gh release upload tal-model tal-79m.pt tal-info.json --clobber
