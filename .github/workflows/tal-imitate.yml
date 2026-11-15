@@ -1,0 +1,47 @@
+name: "Tal: learn rules + book, measure closeness"
+on:
+  workflow_dispatch:
+    inputs:
+      train_positions:
+        default: "6000"
+      eval_positions:
+        default: "2500"
+permissions:
+  contents: write
+jobs:
+  imitate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: maia3-79m
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt git+https://github.com/CSSLab/maia3@1e13597c42d4858b7cfd7cfdae01e297263364b2
+          maia3-cache --model maia3-79m
+      - name: Get Tal model
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download tal-model -p tal-79m.pt -D prev
+      - name: Learn and measure
+        env:
+          IMIT_TRAIN_POSITIONS: ${{ inputs.train_positions }}
+          IMIT_EVAL_POSITIONS: ${{ inputs.eval_positions }}
+        run: python -u -m tal.imitate
+      - name: Save rules and Tal book to the repo
+        run: |
+          cp tal/tal-rules.json /tmp/ && cp book-tal.json /tmp/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin ${{ github.ref_name }} && git reset --hard origin/${{ github.ref_name }}
+          cp /tmp/tal-rules.json tal/ && cp /tmp/book-tal.json .
+          git add tal/tal-rules.json book-tal.json
+          git commit -m "Tal: learned rules and opening book" || echo "no changes"
+          git push
