@@ -33,7 +33,7 @@ def main():
     h = {"Authorization": f"Bearer {tok}"}
     me = requests.get("https://lichess.org/api/account", headers=h, timeout=20).json()["id"]
     r = requests.get(f"https://lichess.org/api/games/user/{me}", headers={**h, "Accept": "application/x-chess-pgn"},
-                     params={"max": N, "moves": "true", "opening": "true"}, timeout=60)
+                     params={"max": N, "moves": "true", "opening": "true", "clocks": "true"}, timeout=60)
     pgn = io.StringIO(r.text)
     maia = Maia(cfg["maia"]["model"])
     sf = chess.engine.SimpleEngine.popen_uci("/usr/games/stockfish")
