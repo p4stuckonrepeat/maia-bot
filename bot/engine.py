@@ -173,9 +173,11 @@ class Guard:
             scores = {c["move"]: self.after(board, c["move"], color, depth) for c in cands}
         best = max(scores.values())
         limit = float(acfg.get("max_loss_cp", 100))
+        if top and move == top[0]["move"]:   # Maia's own first choice gets more freedom (human inaccuracies)
+            limit = float(acfg.get("top_max_loss_cp", limit))
         if best - scores[move] <= limit:
             return move, None
-        ok = [c for c in cands if best - scores[c["move"]] <= limit]
+        ok = [c for c in cands if best - scores[c["move"]] <= float(acfg.get("max_loss_cp", 100))]
         pick = random.choices([c["move"] for c in ok], weights=[c["policy"] for c in ok])[0]
         return pick, (f"assist: {board.san(move)} ({scores[move]:+}) -> Maia's "
                       f"{board.san(pick)} ({scores[pick]:+})")

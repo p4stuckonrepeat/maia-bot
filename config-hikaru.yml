@@ -41,11 +41,12 @@ timing:                # human-like thinking time, based only on the move (not o
   # safety net: under 30 s on the clock it plays fast so it never loses on time
 
 assist:                # quality filter: only between Maia's own natural candidate moves
-  enabled: false        # stops clearly inferior choices (e.g. a 5% move when a 55% move is much better)
-  only_when_not_top: true  # never touch Maia's own first choice (keeps human inaccuracies)
-  max_loss_cp: 150     # allowed gap to the best natural candidate (150 = 1.5 pawns)
+  enabled: true         # stops clearly worse choices when a natural alternative is much better
+  only_when_not_top: false # also checks Maia's own first choice (with more freedom, below)
+  max_loss_cp: 100     # allowed gap to the best natural candidate (100 = 1 pawn)
+  top_max_loss_cp: 150 # Maia's own first choice may be up to 1.5 pawns worse (keeps human inaccuracies)
   min_prob: 0.03       # candidates Maia gives at least 3% are considered
-  depth: 12
+  depth: 12            # the replacement is picked at random among the OK candidates, weighted by Maia
 
 guard:                 # Stockfish blunder guard. Maia still chooses every move.
   enabled: true        # true = ON, false = OFF (applies mid-game within ~30 s)
