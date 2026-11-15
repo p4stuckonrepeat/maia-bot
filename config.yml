@@ -19,7 +19,7 @@ search:                # light human-like calculation with Maia's own judgement 
 style:                 # consistent playing style (one "person" across games)
   enabled: true
   name: classical      # classical theory by phase (opening principles, Nimzowitsch, Steinitz, Capablanca/Tarrasch); or: positional
-  strength: 1.5        # 0 = pure Maia, 1 = noticeable, 2+ = very consistent / predictable
+  strength: 2.0        # 0 = pure Maia, 1 = noticeable, 2+ = very consistent / predictable
   candidates: 8        # how many of Maia's most likely moves the style chooses between
   min_relative_prob: 0.25 # rules may pick moves at least a quarter as likely as Maia's top choice
 
