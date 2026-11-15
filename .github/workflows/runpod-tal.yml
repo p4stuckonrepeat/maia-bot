@@ -1,0 +1,80 @@
+name: "Tal: train on RunPod (paid GPU)"
+on:
+  workflow_dispatch:
+    inputs:
+      gpu:
+        description: "GPU type"
+        default: "NVIDIA GeForce RTX 4090"
+      cloud:
+        description: "COMMUNITY (cheaper) or SECURE"
+        default: "COMMUNITY"
+      max_minutes:
+        description: "Hard limit: the GPU is shut down after this many minutes no matter what"
+        default: "200"
+permissions:
+  contents: write
+jobs:
+  runpod:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    env:
+      RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Check key
+        run: if [ -z "$RUNPOD_API_KEY" ]; then echo "::error::Secret RUNPOD_API_KEY missing"; exit 1; fi
+      - name: Remember start (to detect the new results file)
+        run: echo "STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+      - name: Start GPU
+        run: |
+          SCRIPT='set -e; cd /workspace; git clone --depth 1 https://github.com/'"$GH_REPO"' repo; cd repo;
+          pip install -q chess python-chess huggingface-hub numpy pyyaml requests;
+          pip install -q --no-deps git+https://github.com/CSSLab/maia3@1e13597c42d4858b7cfd7cfdae01e297263364b2;
+          maia3-cache --model maia3-79m;
+          python -u -m tal.cloud_plan 2>&1 | tee /workspace/train.log; sleep infinity'
+          BODY=$(python3 - "$SCRIPT" <<'PY'
+          import json, os, sys
+          print(json.dumps({"name": "maia-tal-training", "image": "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04",
+                            "gpu": {"id": os.environ["GPU"], "count": 1}, "cloud": os.environ["CLOUD"], "disk": 60,
+                            "env": {"GH_TOKEN": os.environ["GH_TOKEN"], "REPO": os.environ["GH_REPO"]},
+                            "args": "bash -c " + json.dumps(sys.argv[1])}))
+          PY
+          )
+          R=$(curl -sS -X POST https://api.runpod.io/v2/pods -H "Authorization: Bearer $RUNPOD_API_KEY" -H "Content-Type: application/json" -d "$BODY")
+          echo "$R" | python3 -c "import json,sys; d=json.load(sys.stdin); print({k: d.get(k) for k in ('id','status','cost','error','message')})"
+          ID=$(echo "$R" | python3 -c "import json,sys; print(json.load(sys.stdin).get('id',''))")
+          if [ -z "$ID" ]; then echo "::error::Could not start a GPU: $R"; exit 1; fi
+          echo "POD=$ID" >> "$GITHUB_ENV"
+        env:
+          GPU: ${{ inputs.gpu }}
+          CLOUD: ${{ inputs.cloud }}
+      - name: Wait for training (checks the results file in the tal-model release)
+        run: |
+          END=$(( $(date +%s) + ${{ inputs.max_minutes }} * 60 ))
+          while [ $(date +%s) -lt $END ]; do
+            ST=$(curl -sS https://api.runpod.io/v2/pods -H "Authorization: Bearer $RUNPOD_API_KEY" | python3 -c "import json,sys,os; d=json.load(sys.stdin); print(next((p.get('status') for p in d.get('pods', d if isinstance(d,list) else []) if p.get('id')==os.environ['POD']), 'unknown'))")
+            UP=$(gh release view tal-model --json assets -q '.assets[] | select(.name=="runpod-results.json") | .updatedAt' 2>/dev/null || true)
+            echo "$(date -u +%H:%M) pod=$ST results=$UP"
+            if [ -n "$UP" ] && [[ "$UP" > "$STARTED" ]]; then echo "training finished"; break; fi
+            if [ "$ST" = "ERROR" ] || [ "$ST" = "TERMINATED" ] || [ "$ST" = "EXITED" ]; then echo "::error::GPU pod stopped: $ST"; break; fi
+            sleep 60
+          done
+      - name: Shut the GPU down (always)
+        if: always()
+        run: |
+          [ -n "$POD" ] && curl -sS -X DELETE "https://api.runpod.io/v2/pods/$POD" -H "Authorization: Bearer $RUNPOD_API_KEY" && echo "terminated $POD" || echo "no pod"
+      - name: Results
+        if: always()
+        run: |
+          gh release download tal-model -p runpod-results.json --clobber 2>/dev/null || { echo "no results"; exit 0; }
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          r = json.load(open("runpod-results.json"))
+          print("## Tal training on RunPod\n| Variant | Before (normal Maia) | After |\n|---|---|---|")
+          for k, v in r.items():
+              if isinstance(v, dict) and "after" in v:
+                  print(f"| {k} | {v['before']:.1%} | {v['after']:.1%} |")
+          print(f"\nBest: {r.get('best')} - saved as Tal model: {r.get('saved')}")
+          PY
+          cat "$GITHUB_STEP_SUMMARY"
