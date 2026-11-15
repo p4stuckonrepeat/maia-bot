@@ -70,6 +70,17 @@ challenges:
   accept_bots: true
   max_games: 1            # games at the same time
 
+matchmaking:           # when idle, challenge other Lichess bots (to measure the real rating)
+  enabled: true
+  rated: true
+  speed: blitz
+  limit: 180           # 3+2
+  increment: 2
+  min_rating: 1900
+  max_rating: 2700
+  idle_seconds: 60
+  exclude: []
+
 session:
   stop_accepting_minutes_before_end: 20
 

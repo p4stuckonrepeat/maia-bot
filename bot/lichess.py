@@ -57,6 +57,25 @@ class Lichess:
             return False
         return True
 
+    def online_bots(self, nb=100):
+        r = self._req("GET", "/api/bot/online", params={"nb": nb})
+        if r is None or r.status_code != 200:
+            return []
+        import json as _j
+        return [_j.loads(l) for l in r.text.splitlines() if l.strip()]
+
+    def challenge(self, user, limit, inc, rated=True):
+        r = self._req("POST", f"/api/challenge/{user}", retries=2,
+                      data={"rated": str(rated).lower(), "clock.limit": limit, "clock.increment": inc,
+                            "color": "random", "variant": "standard"})
+        if r is None or r.status_code != 200:
+            return None, (r.text[:200] if r is not None else "no response")
+        d = r.json()
+        return (d.get("challenge") or d).get("id"), None
+
+    def cancel_challenge(self, cid):
+        self._req("POST", f"/api/challenge/{cid}/cancel", retries=1)
+
     def stream(self, path):
         """Yield JSON events from an ndjson stream; returns when the stream closes."""
         with self.s.get(BASE + path, stream=True, timeout=(15, 75)) as r:

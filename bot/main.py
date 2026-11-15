@@ -1,6 +1,7 @@
 """Maia-3 Lichess bot: accepts challenges and plays them with Maia-3 for one session."""
 import argparse
 import os
+import random
 import threading
 import time
 
@@ -29,6 +30,9 @@ class Bot:
         self.pending = {}       # challenge id -> accept time (game not started yet)
         self.accepting = True
         self.results = []
+        self.outgoing = {}      # challenge id -> (bot name, time sent)
+        self.cooldown = {}      # bot name -> time we may challenge it again
+        self.last_busy = time.time()
 
     @property
     def cfg(self):
@@ -92,13 +96,19 @@ class Bot:
                     if t == "challenge":
                         self.on_challenge(ev["challenge"])
                     elif t in ("challengeCanceled", "challengeDeclined"):
+                        cid = ev["challenge"]["id"]
                         with self.lock:
-                            self.pending.pop(ev["challenge"]["id"], None)
+                            self.pending.pop(cid, None)
+                            if cid in self.outgoing:
+                                name, _ = self.outgoing.pop(cid)
+                                self.cooldown[name] = time.time() + 6 * 3600
+                                log(f"matchmaking: {name} declined")
                     elif t == "gameStart":
                         g = ev["game"]
                         gid = g.get("gameId") or g.get("id")
                         with self.lock:
                             self.pending.pop(gid, None)
+                            self.outgoing.pop(gid, None)
                             if gid in self.active:
                                 continue
                             self.active.add(gid)
@@ -107,6 +117,54 @@ class Bot:
                 log(f"event stream error: {e}")
             log("event stream closed, reconnecting in 5s")
             time.sleep(5)
+
+    # ---------- matchmaking: challenge other bots to rated games when idle ----------
+    def matchmaking_loop(self):
+        while True:
+            time.sleep(20)
+            try:
+                mm = self.cfg.get("matchmaking", {})
+                if not mm.get("enabled") or not self.accepting:
+                    continue
+                now = time.time()
+                with self.lock:
+                    busy = bool(self.active or self.pending)
+                    for cid, (name, t) in list(self.outgoing.items()):
+                        if now - t > 60:                      # no answer: cancel, try someone else
+                            self.outgoing.pop(cid)
+                            self.cooldown[name] = now + 3600
+                            self.api.cancel_challenge(cid)
+                    waiting = bool(self.outgoing)
+                if busy:
+                    self.last_busy = now
+                    continue
+                if waiting or now - self.last_busy < mm.get("idle_seconds", 60):
+                    continue
+                speed = mm.get("speed", "blitz")
+                lo, hi = mm.get("min_rating", 1900), mm.get("max_rating", 2700)
+                cands = []
+                for b in self.api.online_bots():
+                    name = b.get("username", "")
+                    rating = (b.get("perfs", {}).get(speed) or {}).get("rating")
+                    if not name or name.lower() == self.me or rating is None or not lo <= rating <= hi:
+                        continue
+                    if self.cooldown.get(name, 0) > now or name.lower() in [x.lower() for x in mm.get("exclude", [])]:
+                        continue
+                    cands.append((name, rating))
+                if not cands:
+                    continue
+                name, rating = random.choice(cands)
+                cid, err = self.api.challenge(name, mm.get("limit", 180), mm.get("increment", 2), mm.get("rated", True))
+                if cid:
+                    with self.lock:
+                        self.outgoing[cid] = (name, now)
+                    log(f"matchmaking: challenged {name} ({rating}) {mm.get('limit', 180)}+{mm.get('increment', 2)} "
+                        f"{'rated' if mm.get('rated', True) else 'casual'}")
+                else:
+                    self.cooldown[name] = now + 6 * 3600
+                    log(f"matchmaking: could not challenge {name}: {err}")
+            except Exception as e:
+                log(f"matchmaking error: {e}")
 
     # ---------- games ----------
     def play_game(self, gid):
@@ -278,6 +336,11 @@ def run(settings, api, maia, guard, acc, me, args):
     bot = Bot(settings, api, maia, guard, me, book)
     settings.start(log)
     threading.Thread(target=bot.event_loop, daemon=True).start()
+    threading.Thread(target=bot.matchmaking_loop, daemon=True).start()
+    perfs = acc.get("perfs", {})
+    log("Lichess ratings at start: " + ", ".join(
+        f"{k} {v.get('rating')} ({v.get('games')} games{', provisional' if v.get('prov') else ''})"
+        for k, v in perfs.items() if k in ("bullet", "blitz", "rapid", "classical")))
     hours = min(args.hours, 5.6)
     end = time.time() + hours * 3600
     stop_accept = end - settings.cfg["session"]["stop_accepting_minutes_before_end"] * 60
@@ -298,10 +361,17 @@ def run(settings, api, maia, guard, acc, me, args):
     d = sum(r[3] == "draw" for r in bot.results)
     l = sum(r[3] == "loss" for r in bot.results)
     log(f"Session over. Games: {len(bot.results)} | W {w} D {d} L {l}")
+    try:
+        p2 = api.account().get("perfs", {})
+        rating_line = ", ".join(f"{k} {v.get('rating')} ({v.get('games')} games{', provisional' if v.get('prov') else ''})"
+                                for k, v in p2.items() if k in ("blitz", "rapid"))
+        log("Lichess ratings now: " + rating_line)
+    except Exception:
+        rating_line = "?"
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with open(summary, "a") as f:
-            f.write(f"## Bot session\nGames: {len(bot.results)} | W {w} D {d} L {l}\n\n")
+            f.write(f"## Bot session\nGames: {len(bot.results)} | W {w} D {d} L {l}\n\nLichess ratings now: {rating_line}\n\n")
             for gid, opp, rating, result, status, vetoes, opening, bm in bot.results:
                 f.write(f"- [{result}] vs {opp} ({rating}), {status}, {opening or 'no book'} "
                         f"({bm} book moves), guard vetoes {vetoes}: https://lichess.org/{gid}\n")
