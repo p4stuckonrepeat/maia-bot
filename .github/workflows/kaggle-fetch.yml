@@ -1,0 +1,39 @@
+name: "Fetch Kaggle training result"
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: "Model name used for the training (e.g. hikaru)"
+        default: "hikaru"
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    env:
+      KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+      KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+      KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - run: pip install -q kaggle
+      - name: Status
+        run: |
+          SLUG="$KAGGLE_USERNAME/maia-style-${{ inputs.name }}"
+          st=$(kaggle kernels status "$SLUG" 2>&1 || true); echo "$st"
+          case "$st" in *complete*|*COMPLETE*) ;; *) echo "::warning::Not finished yet: $st"; exit 1;; esac
+          kaggle kernels output "$SLUG" -p out
+          ls -la out; tail -30 out/*.log 2>/dev/null || true
+      - name: Summary
+        run: |
+          python3 - <<PY >> "$GITHUB_STEP_SUMMARY"
+          import json; i = json.load(open("out/${{ inputs.name }}-info.json"))
+          print(f"## Style training: {i.get('player')}\n- games {i['games']}, trained moves {i['train_moves']}, epochs {i['epochs']:.2f}, {i['positions_per_s']:.0f} positions/s\n- predicts the player's move on held-out games: **{i['before']:.1%} -> {i['after']:.1%}**")
+          PY
+          cat "$GITHUB_STEP_SUMMARY"
+      - name: Save as release (only if better than normal Maia)
+        run: |
+          python3 -c "import json,sys; sys.exit(0 if json.load(open('out/${{ inputs.name }}-info.json'))['improved'] else 1)" || { echo "Not better than normal Maia - not saved"; exit 0; }
+          TAG="${{ inputs.name }}-model"
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "${{ inputs.name }} style model" --notes "Maia-3 79M fine-tuned"
+          gh release upload "$TAG" "out/${{ inputs.name }}-79m.pt" "out/${{ inputs.name }}-info.json" --clobber
