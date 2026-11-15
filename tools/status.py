@@ -24,7 +24,7 @@ bots = [__import__('json').loads(l) for l in requests.get("https://lichess.org/a
 inr = [b for b in bots if 1900 <= ((b.get("perfs", {}).get("blitz") or {}).get("rating") or 0) <= 2700]
 lines.append(f"Online bots: {len(bots)}, with blitz 1900-2700: {len(inr)}")
 r = requests.get(f"https://lichess.org/api/games/user/{me}", headers={**h, "Accept": "application/x-chess-pgn"},
-                 params={"max": 8}, timeout=60)
+                 params={"max": int(os.environ.get("STATUS_GAMES", "20"))}, timeout=60)
 pgn = io.StringIO(r.text)
 lines.append("Last games:")
 while True:
