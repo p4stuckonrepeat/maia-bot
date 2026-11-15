@@ -5,6 +5,9 @@ on:
       games:
         description: "How many recent games"
         default: "10"
+      threshold:
+        description: "Report moves losing at least this many centipawns"
+        default: "150"
 jobs:
   analyze:
     runs-on: ubuntu-latest
@@ -28,4 +31,5 @@ jobs:
         env:
           LICHESS_TOKEN: ${{ secrets.LICHESS_TOKEN }}
           ANALYZE_GAMES: ${{ inputs.games }}
+          ANALYZE_THRESHOLD: ${{ inputs.threshold }}
         run: python -u -m tools.analyze

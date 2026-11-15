@@ -19,6 +19,7 @@ from bot.engine import Maia
 from bot.style import positional_score
 
 N = int(os.environ.get("ANALYZE_GAMES", "10"))
+THRESH = int(os.environ.get("ANALYZE_THRESHOLD", "150"))
 DEPTH = 16
 
 
@@ -68,14 +69,15 @@ def main():
                     loss = max(0, before - after)
                     losses.append(loss)
                     rows.append((loss, rank, prob))
-                    if loss >= 150:
+                    if loss >= THRESH:
                         top1 = board.copy(); top1.pop()
-                        notes.append(f"  move {top1.fullmove_number}: {san} lost {loss/100:.1f} "
+                        notes.append(f"  move {top1.fullmove_number}: {san} eval {before/100:+.1f} -> {after/100:+.1f}, lost {loss/100:.1f} "
                                      f"(Maia rank {rank}, prob {prob:.0%}, style {style:+.2f}; "
                                      f"Maia's top choice was {top1.san(top[0]['move'])} "
                                      f"{top[0]['policy']:.0%})")
                     continue
             board.push(mv)
+        print(str(g), flush=True)
         res = g.headers["Result"]
         out.append(f"{'White' if color else 'Black'} vs {opp} ({opp_elo}) {res} "
                    f"{g.headers.get('Opening', '')} | avg loss {st.mean(losses) if losses else 0:.0f} cp | "
