@@ -1,0 +1,11 @@
+name: Bot status
+on: workflow_dispatch
+jobs:
+  status:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install -q requests chess
+      - env:
+          LICHESS_TOKEN: ${{ secrets.LICHESS_TOKEN }}
+        run: python -u tools/status.py
