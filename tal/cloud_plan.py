@@ -14,16 +14,16 @@ import requests
 
 REPO = os.environ["REPO"]
 GH = {"Authorization": f"Bearer {os.environ['GH_TOKEN']}", "Accept": "application/vnd.github+json"}
-GROUP = "group:Alekhine,Bronstein,Kasparov,Shirov,Topalov,Morozevich"
+GROUP = "group:Alekhine,Bronstein,Kasparov,Shirov,Topalov,Morozevich,Spassky,Keres,Geller,Larsen,Nezhmetdinov,Polugaevsky,Velimirovic,Short"
 CURRENT_BEST = float(os.environ.get("CURRENT_BEST", "0.594"))   # tal-model so far: 59.4%
 
 VARIANTS = [
-    # name, resume from pretrain?, blocks, lr, epochs
-    ("pre_b8_lr5e-6", True, 8, "5e-6", "4"),
-    ("pre_b4_lr1e-5", True, 4, "1e-5", "5"),
-    ("pre_b2_lr2e-5", True, 2, "2e-5", "6"),
-    ("nopre_b8_lr5e-6", False, 8, "5e-6", "4"),
+    # name, resume from pretrain?, blocks, lr, epochs, minutes
+    ("pre_b8_lr5e-6", True, 8, "5e-6", "5", "25"),
+    ("pre_b4_lr1e-5", True, 4, "1e-5", "6", "20"),
+    ("pre_all_lr3e-6", True, 99, "3e-6", "4", "25"),
 ]
+BATCH = os.environ.get("PLAN_BATCH", "256")
 
 
 def log(*a):
@@ -31,7 +31,7 @@ def log(*a):
 
 
 def run(env_extra):
-    env = {**os.environ, "TAL_BATCH": "128", "TAL_EVAL": "3000", "TAL_EVAL_EVERY": "300", **env_extra}
+    env = {**os.environ, "TAL_BATCH": BATCH, "TAL_EVAL": "3000", "TAL_EVAL_EVERY": "300", **env_extra}
     subprocess.run(["python", "-u", "-m", "tal.train"], check=True, env=env)
     return json.load(open("tal-info.json"))
 
@@ -60,13 +60,14 @@ def main():
     results = {}
     try:
         log("stage 1: pretraining on", GROUP)
-        pre = run({"PLAYER": GROUP, "PLAYER_MAX_GAMES": "0", "TAL_EPOCHS": "1", "TAL_TRAIN_BLOCKS": "8",
-                   "TAL_LR": "1e-5", "TAL_MINUTES": "60", "TAL_OUT": "pretrain-79m.pt", "TAL_EVAL": "1000"})
+        pre = run({"PLAYER": GROUP, "PLAYER_MAX_GAMES": "0", "TAL_EPOCHS": "2", "TAL_TRAIN_BLOCKS": "12",
+                   "TAL_LR": "1e-5", "TAL_MINUTES": "70", "TAL_OUT": "pretrain-79m.pt", "TAL_EVAL": "1000"})
         results["pretrain"] = pre
-        for name, use_pre, blocks, lr, epochs in VARIANTS:
+        best_after = CURRENT_BEST
+        for name, use_pre, blocks, lr, epochs, minutes in VARIANTS:
             log("stage 2:", name)
             env = {"PLAYER": "tal", "PLAYER_MAX_GAMES": "0", "TAL_EPOCHS": epochs, "TAL_TRAIN_BLOCKS": str(blocks),
-                   "TAL_LR": lr, "TAL_MINUTES": "40", "TAL_OUT": f"{name}.pt", "TAL_RESUME": ""}
+                   "TAL_LR": lr, "TAL_MINUTES": minutes, "TAL_OUT": f"{name}.pt", "TAL_RESUME": ""}
             if use_pre:
                 env["TAL_RESUME"] = "pretrain-79m.pt"
             try:
@@ -74,14 +75,18 @@ def main():
             except subprocess.CalledProcessError as e:
                 results[name] = {"error": str(e)}
             log(name, results[name].get("before"), "->", results[name].get("after"))
+            # save progress after every variant, so a timeout never loses finished work
+            after = results[name].get("after") or 0
+            if after > best_after:
+                best_after = after
+                upload("tal-model", f"{name}.pt", "tal-79m.pt")
+                results["saved_so_far"] = name
+            json.dump(results, open("runpod-progress.json", "w"), indent=1)
+            upload("tal-model", "runpod-progress.json", "runpod-progress.json")
         ok = {k: v for k, v in results.items() if k != "pretrain" and "after" in v}
         best = max(ok, key=lambda k: ok[k]["after"]) if ok else None
         results["best"] = best
-        if best and ok[best]["after"] > CURRENT_BEST:
-            results["saved"] = True
-            upload("tal-model", f"{best}.pt", "tal-79m.pt")
-        else:
-            results["saved"] = False
+        results["saved"] = bool(best and ok[best]["after"] > CURRENT_BEST)   # already uploaded above
     finally:
         json.dump(results, open("runpod-results.json", "w"), indent=1)
         if os.path.exists("/workspace/train.log"):

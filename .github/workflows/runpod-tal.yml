@@ -4,13 +4,13 @@ on:
     inputs:
       gpu:
         description: "GPU type"
-        default: "NVIDIA GeForce RTX 4090"
+        default: "NVIDIA H100 80GB HBM3"
       cloud:
         description: "COMMUNITY (cheaper) or SECURE"
-        default: "COMMUNITY"
+        default: "SECURE"
       max_minutes:
         description: "Hard limit: the GPU is shut down after this many minutes no matter what"
-        default: "200"
+        default: "180"
 permissions:
   contents: write
 jobs:
@@ -43,7 +43,7 @@ jobs:
           )
           ID=""
           for C in "$CLOUD" COMMUNITY SECURE; do
-            for G in "$GPU" "NVIDIA GeForce RTX 4090" "NVIDIA GeForce RTX 3090" "NVIDIA A40" "NVIDIA RTX A6000" "NVIDIA RTX A5000" "NVIDIA L40S" "NVIDIA RTX 6000 Ada Generation"; do
+            for G in "$GPU" "NVIDIA H100 PCIe" "NVIDIA H100 NVL" "NVIDIA A100-SXM4-80GB" "NVIDIA A100 80GB PCIe" "NVIDIA GeForce RTX 4090" "NVIDIA GeForce RTX 3090" "NVIDIA A40" "NVIDIA RTX A6000" "NVIDIA RTX A5000" "NVIDIA L40S" "NVIDIA RTX 6000 Ada Generation"; do
               B=$(echo "$BODY" | G="$G" C="$C" python3 -c "import json,sys,os; d=json.load(sys.stdin); d['gpu']['id']=os.environ['G']; d['cloud']=os.environ['C']; print(json.dumps(d))")
               R=$(curl -sS -X POST https://api.runpod.io/v2/pods -H "Authorization: Bearer $RUNPOD_API_KEY" -H "Content-Type: application/json" -d "$B")
               ID=$(echo "$R" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('id') or '')" 2>/dev/null || true)
