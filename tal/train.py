@@ -125,7 +125,8 @@ def samples(games):
 
 class Encoder:
     def __init__(self, eng):
-        self.eng, self.cfg = eng, eng.cfg
+        self.cfg = eng.cfg
+        self.all_moves_dict = eng.all_moves_dict      # no model reference: safe for worker processes
 
     def encode(self, g, ply):
         board, hist = chess.Board(), deque(maxlen=self.cfg.history)
@@ -134,11 +135,11 @@ class Encoder:
             board.push_uci(m)
             hist.append(tokenize_board(board))
         tokens = get_historical_tokens(hist, self.cfg, 0.0, 0.0, 0.0, 0.0)
-        mask = get_legal_moves_mask(board, self.eng.all_moves_dict)
+        mask = get_legal_moves_mask(board, self.all_moves_dict)
         uci = g["moves"][ply]
         if board.turn == chess.BLACK:
             uci = mirror_move(uci)
-        target = self.eng.all_moves_dict.get(uci)
+        target = self.all_moves_dict.get(uci)
         res = g["result"]
         tal_won = (res == "1-0" and g["tal"] == chess.WHITE) or (res == "0-1" and g["tal"] == chess.BLACK)
         value = 1 if res == "1/2-1/2" else (2 if tal_won else 0) if res in ("1-0", "0-1") else -100
@@ -154,6 +155,25 @@ class Encoder:
         return t, m, y, v
 
 
+class PosDataset(torch.utils.data.Dataset):
+    def __init__(self, enc, games, items):
+        self.enc, self.games, self.items = enc, games, items
+
+    def __len__(self):
+        return len(self.items)
+
+    def __getitem__(self, i):
+        gi, ply = self.items[i]
+        t, m, y, v = self.enc.encode(self.games[gi], ply)
+        return t, m, -1 if y is None else y, v
+
+
+def loader(enc, games, items, bs, shuffle):
+    return torch.utils.data.DataLoader(PosDataset(enc, games, items), batch_size=bs, shuffle=shuffle,
+                                       num_workers=max(1, (os.cpu_count() or 2)), pin_memory=DEVICE == "cuda",
+                                       persistent_workers=False)
+
+
 def forward(model, t, m):
     elos = torch.full((t.size(0),), ELO, dtype=torch.float, device=t.device)
     with torch.autocast("cuda", dtype=torch.float16, enabled=DEVICE == "cuda"):
@@ -162,14 +182,15 @@ def forward(model, t, m):
 
 
 @torch.no_grad()
-def accuracy(model, enc, games, items, bs=64):
+def accuracy(model, enc, games, items, bs=128):
     model.eval()
     hit = n = 0
-    for i in range(0, len(items), bs):
-        t, m, y, _ = enc.batch(games, items[i:i + bs])
+    for t, m, y, _ in loader(enc, games, items, bs, False):
+        t, m, y = t.to(DEVICE, non_blocking=True), m.to(DEVICE, non_blocking=True), y.to(DEVICE)
+        ok = y >= 0
         lm, _ = forward(model, t, m)
-        hit += (lm.argmax(-1) == y).sum().item()
-        n += len(y)
+        hit += (lm.argmax(-1)[ok] == y[ok]).sum().item()
+        n += ok.sum().item()
     return hit / max(1, n)
 
 
@@ -206,7 +227,7 @@ def main():
 
     t0 = time.time()
     base = accuracy(model, enc, hold, s_hold)
-    log(f"held-out Tal move match BEFORE training: {base:.1%} ({time.time() - t0:.0f}s)")
+    log(f"held-out player move match BEFORE training: {base:.1%} ({time.time() - t0:.0f}s)")
 
     # Train only the top of the network: Tal's style on top of Maia's general chess knowledge.
     n_blocks = len(model.transformer.layers)
@@ -227,13 +248,15 @@ def main():
     deadline, step, seen, t_start = time.time() + minutes * 60, 0, 0, time.time()
     model.train()
     while step < total_steps and time.time() < deadline:
-        rng.shuffle(s_train)
-        for i in range(0, len(s_train), bs):
+        for t, m, y, v in loader(enc, train, s_train, bs, True):
             if step >= total_steps or time.time() >= deadline:
                 break
-            t, m, y, v = enc.batch(train, s_train[i:i + bs])
+            t, m = t.to(DEVICE, non_blocking=True), m.to(DEVICE, non_blocking=True)
+            y, v = y.to(DEVICE), v.to(DEVICE)
+            if not (y >= 0).any():
+                continue
             lm, lv = forward(model, t, m)
-            loss = F.cross_entropy(lm, y)
+            loss = F.cross_entropy(lm, y, ignore_index=-1)
             keep = v >= 0
             if keep.any():
                 loss = loss + value_w * F.cross_entropy(lv[keep], v[keep])
@@ -253,7 +276,7 @@ def main():
                 acc = accuracy(model, enc, hold, quick)
                 model.train()
                 if acc > best_acc:
-                    best_acc, best_state = acc, {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+                    best_acc, best_state = acc, {k: v_.detach().cpu().clone() for k, v_ in model.state_dict().items()}
                 log(f"quick eval at step {step}: {acc:.1%} (best {best_acc:.1%})")
     rate = seen / max(1, time.time() - t_start)
     acc = accuracy(model, enc, hold, quick)
@@ -263,7 +286,7 @@ def main():
     after = accuracy(model, enc, hold, s_hold)
     info = {"before": base, "after": after, "positions_trained": seen, "epochs": seen / len(s_train),
             "positions_per_s": rate, "train_moves": len(s_train), "games": len(games)}
-    log(f"held-out Tal move match AFTER training: {after:.1%} (before {base:.1%})")
+    log(f"held-out player move match AFTER training: {after:.1%} (before {base:.1%})")
     info["improved"] = after > base
     info["player"] = PLAYER
     torch.save({"model_state_dict": {k: v.cpu() for k, v in model.state_dict().items()}, "info": info}, OUT)

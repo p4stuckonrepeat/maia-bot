@@ -53,7 +53,7 @@ jobs:
           os.environ.update({"PLAYER": "${{ inputs.player }}", "PLAYER_MAX_GAMES": "${{ inputs.max_games }}",
                              "TAL_EPOCHS": "${{ inputs.epochs }}", "TAL_MINUTES": "${{ inputs.minutes }}",
                              "TAL_TRAIN_BLOCKS": "${{ inputs.train_blocks }}", "TAL_LR": "${{ inputs.lr }}",
-                             "TAL_BATCH": "64", "TAL_EVAL_EVERY": "1500",
+                             "TAL_BATCH": "128", "TAL_EVAL_EVERY": "1500",
                              "TAL_OUT": "/kaggle/working/${{ inputs.name }}-79m.pt"})
           os.chdir("repo")
           sh("python -u -m tal.train")
