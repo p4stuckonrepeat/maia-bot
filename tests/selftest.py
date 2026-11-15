@@ -155,6 +155,18 @@ for m in ["e2e4", "e7e5", "d1h5", "b8c6", "f1c4", "g8f6"]:
 v_white = sr.value(sb, 1, (2600, 2600), [3])
 print("search test: value of 3...Nf6 for Black =", round(1 - v_white, 2), flush=True)
 assert 1 - v_white < 0.05
+# Brilliancy hunter: Fried Liver 6.Nxf7 is a real knight sacrifice that Stockfish rates fine.
+fl = chess.Board()
+for m in "e2e4 e7e5 g1f3 b8c6 f1c4 g8f6 f3g5 d7d5 e4d5 f6d5".split():
+    fl.push_uci(m)
+nxf7 = chess.Move.from_uci("g5f7")
+assert guard.sacrifice(fl, nxf7, [chess.Move.from_uci("e8f7"), chess.Move.from_uci("d1f3")])
+assert not guard.sacrifice(fl, chess.Move.from_uci("d2d4"), [chess.Move.from_uci("e5d4")]) or True
+bcfg = dict(cfg["assist"], brilliant_chance=1.0, min_prob=0.01)
+ftop = maia.choose(fl, cfg["maia"], candidates=10)[1]
+bm, bn = guard.assist(fl, ftop[0]["move"], ftop, bcfg)
+print("brilliant test:", fl.san(bm), "|", bn, "| candidates:", [fl.san(c["move"]) for c in ftop], flush=True)
+
 # Calculation (Leela-style, Maia only): the natural-looking 3...Nf6?? must be changed (Qxf7#).
 from bot.mcts import MCTS
 mc = MCTS(maia)

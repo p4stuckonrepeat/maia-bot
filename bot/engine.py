@@ -104,6 +104,42 @@ class Guard:
         finally:
             board.pop()
 
+    VALUES = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9, chess.KING: 0}
+
+    @classmethod
+    def material(cls, board, color):
+        return sum(cls.VALUES[p.piece_type] * (1 if p.color == color else -1) for p in board.piece_map().values())
+
+    def after_pv(self, board, move, color, depth):
+        """(score after `move` from color's view, Stockfish's main line after it)."""
+        board.push(move)
+        try:
+            if board.is_checkmate():
+                return 10000, []
+            if board.is_game_over():
+                return 0, []
+            info = self.sf.analyse(board, chess.engine.Limit(depth=depth))
+            return info["score"].pov(color).score(mate_score=10000), list(info.get("pv", []))[:2]
+        finally:
+            board.pop()
+
+    def sacrifice(self, board, move, pv, min_material=2):
+        """True if `move` gives up material (2+ pawns' worth) that is not won straight back in the main line."""
+        color = board.turn
+        start = self.material(board, color)
+        b = board.copy(stack=False)
+        line = [move] + pv
+        deltas = []
+        for m in line:
+            if m not in b.legal_moves:
+                break
+            b.push(m)
+            deltas.append(self.material(b, color) - start)
+        if len(deltas) < 2:
+            return False
+        settled = deltas[2] if len(deltas) >= 3 else deltas[1]   # after their capture and our next move
+        return min(deltas[1], settled) <= -min_material and settled <= -min_material
+
     def check(self, board, move, gcfg, candidates_fn):
         """Return (final move, note or None)."""
         color, depth = board.turn, int(gcfg["depth"])
@@ -170,8 +206,22 @@ class Guard:
         if len(cands) < 2:
             return move, None
         with self.lock:
-            scores = {c["move"]: self.after(board, c["move"], color, depth) for c in cands}
+            res = {c["move"]: self.after_pv(board, c["move"], color, depth) for c in cands}
+        scores = {m: r[0] for m, r in res.items()}
         best = max(scores.values())
+        # brilliancy hunter: a natural candidate that sacrifices material and Stockfish still rates
+        # as (nearly) the best move -> prefer it (what chess.com calls "brilliant")
+        bc = float(acfg.get("brilliant_chance", 0))
+        if bc > 0 and best < 10000:
+            margin = float(acfg.get("brilliant_margin_cp", 40))
+            brill = [c for c in cands if scores[c["move"]] >= best - margin and scores[c["move"]] > -100
+                     and self.sacrifice(board, c["move"], res[c["move"]][1])]
+            if brill and random.random() < bc:
+                pick = random.choices([c["move"] for c in brill], weights=[c["policy"] + 0.01 for c in brill])[0]
+                if pick == move:
+                    return move, f"sacrifice: {board.san(move)} ({scores[move]:+})"
+                return pick, (f"sacrifice: {board.san(pick)} ({scores[pick]:+}) instead of "
+                              f"{board.san(move)} ({scores[move]:+})")
         limit = float(acfg.get("max_loss_cp", 100))
         if top and move == top[0]["move"]:   # Maia's own first choice gets more freedom (human inaccuracies)
             limit = float(acfg.get("top_max_loss_cp", limit))

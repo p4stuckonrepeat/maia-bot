@@ -65,6 +65,8 @@ assist:                # quality filter: only between Maia's own natural candida
   top_max_loss_cp: 150 # Maia's own first choice may be up to 1.5 pawns worse (keeps human inaccuracies)
   min_prob: 0.03       # candidates Maia gives at least 3% are considered
   depth: 12            # the replacement is picked at random among the OK candidates, weighted by Maia
+  brilliant_chance: 0.5   # if a natural candidate sacrifices material and Stockfish rates it (nearly) best, play it this often
+  brilliant_margin_cp: 40  # "nearly best" = at most 0.4 pawns below the best natural candidate
 
 guard:                 # Stockfish blunder guard. Maia still chooses every move.
   enabled: true        # true = ON, false = OFF (applies mid-game within ~30 s)
