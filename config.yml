@@ -3,7 +3,7 @@
 maia:
   model: maia3-79m     # (model change needs a restart)
   elo: 2600            # rating Maia imitates (trained range 600-2600)
-  temperature: 0.8     # 0 = always most likely move, 1 = full human randomness
+  temperature: 1.0     # 0 = always most likely move, 1 = full human randomness
   top_p: 0.9           # only sample from the most likely moves covering this probability
   oppo_elo: 2600       # opponent rating Maia assumes; "opponent" = real rating (plays sloppier vs weak players)
 
