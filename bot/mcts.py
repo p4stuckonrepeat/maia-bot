@@ -106,6 +106,8 @@ class MCTS:
         raw = {ch.move: ch.prior for ch in root.children}
         if natural not in raw:
             root.children.append(Child(natural, 0.01))
+        nat_child = next(ch for ch in root.children if ch.move == natural)
+        must = int(cfg.get("natural_visits", 6))   # always check the move the bot wants to play
         while self.evals < max_nodes and time.time() - t0 < budget_s:
             pending, paths = [], []
             for _ in range(batch):
@@ -115,7 +117,10 @@ class MCTS:
                 while True:
                     sq = math.sqrt(node.n + 1)
                     fpu = node.v - fpu_red
-                    c = max(node.children, key=lambda ch: self._q(ch, fpu) + cpuct * ch.prior * sq / (1 + ch.n + ch.vl))
+                    if node is root and nat_child.n + nat_child.vl < must:
+                        c = nat_child
+                    else:
+                        c = max(node.children, key=lambda ch: self._q(ch, fpu) + cpuct * ch.prior * sq / (1 + ch.n + ch.vl))
                     b.push(c.move)
                     path.append((node, c))
                     c.vl += 1
