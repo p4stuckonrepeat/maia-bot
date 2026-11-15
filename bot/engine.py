@@ -232,6 +232,21 @@ class Guard:
         return pick, (f"assist: {board.san(move)} ({scores[move]:+}) -> Maia's "
                       f"{board.san(pick)} ({scores[pick]:+})")
 
+    @staticmethod
+    def attacking(board, move):
+        """Tal's kind of sacrifice: it gives check, or our pieces bear down on the enemy king afterwards."""
+        them = not board.turn
+        b = board.copy(stack=False)
+        k = b.king(them)
+        before = sum(len(b.attackers(board.turn, sq)) for sq in chess.SquareSet(chess.BB_KING_ATTACKS[k] | chess.BB_SQUARES[k]))
+        b.push(move)
+        if b.is_check():
+            return True
+        k = b.king(them)
+        after = sum(len(b.attackers(board.turn, sq)) for sq in chess.SquareSet(chess.BB_KING_ATTACKS[k] | chess.BB_SQUARES[k]))
+        shield = len(chess.SquareSet(chess.BB_KING_ATTACKS[k]) & b.pieces(chess.PAWN, them))
+        return after >= max(3, before + 1) or (after >= 2 and shield <= 1)
+
     def brilliant(self, board, move, top, bcfg):
         """Sacrifice hunter on its own (Tal mode): if a natural candidate sacrifices material and the
         position after it is still at least `min_eval_cp` (about equal), play it. Return (move, note or None)."""
@@ -248,12 +263,24 @@ class Guard:
             sacs = []
             for c in cands:
                 sc, pv = self.after_pv(board, c["move"], color, depth)
-                if sc >= float(bcfg.get("min_eval_cp", -30)) and self.sacrifice(board, c["move"], pv):
-                    sacs.append((c, sc))
-        if not sacs or random.random() >= float(bcfg.get("chance", 1.0)):
+                if not self.sacrifice(board, c["move"], pv):
+                    continue
+                if sc >= float(bcfg.get("min_eval_cp", -30)):
+                    sacs.append((c, sc, "sound"))
+                elif bcfg.get("speculative") and sc >= float(bcfg.get("spec_min_eval_cp", -150)) \
+                        and self.attacking(board, c["move"]):
+                    sacs.append((c, sc, "speculative"))
+        sound = [x for x in sacs if x[2] == "sound"]
+        spec = [x for x in sacs if x[2] == "speculative"]
+        if sound and random.random() < float(bcfg.get("chance", 1.0)):
+            pool = sound
+        elif spec and random.random() < float(bcfg.get("spec_chance", 0.7)):
+            pool = spec
+        else:
             return move, None
-        c, sc = random.choices(sacs, weights=[c["policy"] + 0.01 for c, _ in sacs])[0]
-        return c["move"], f"sacrifice: {board.san(c['move'])} ({sc:+})" + (
+        c, sc, kind = random.choices(pool, weights=[x[0]["policy"] + 0.01 for x in pool])[0]
+        label = "sacrifice" if kind == "sound" else "speculative sacrifice"
+        return c["move"], f"{label}: {board.san(c['move'])} ({sc:+})" + (
             "" if c["move"] == move else f" instead of {board.san(move)}")
 
     def close(self):

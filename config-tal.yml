@@ -76,6 +76,9 @@ brilliant:             # Tal mode: always go for sacrifices that keep the positi
   min_eval_cp: -30     # position after the sacrifice must be at least equal (Stockfish, -0.3 or better)
   min_prob: 0.02       # only moves Maia gives 2%+ (a human could find them)
   depth: 12
+  speculative: true    # also Tal's speculative sacrifices: objectively a bit worse, but they create an attack
+  spec_min_eval_cp: -150   # may cost up to 1.5 pawns by Stockfish's count (never more)
+  spec_chance: 0.7     # how often it goes for one when available
 
 guard:                 # Stockfish blunder guard. Maia still chooses every move.
   enabled: true        # true = ON, false = OFF (applies mid-game within ~30 s)
