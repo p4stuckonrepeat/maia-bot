@@ -23,15 +23,19 @@ style:                 # consistent playing style (one "person" across games)
   candidates: 8        # how many of Maia's most likely moves the style chooses between
   min_relative_prob: 0.5  # style only picks moves at least half as likely as Maia's top choice
 
-timing:                # human-like thinking time, based only on how hard the move is
+timing:                # human-like thinking time, based only on the move (not on the clock)
   enabled: true
   speed: 1.0           # multiplies all times: 1.5 = slower, 0.7 = faster
-  book: [0.4, 1.8]     # seconds (min, max) for prepared opening moves
-  obvious: [0.5, 1.5]  # recaptures and moves Maia is very sure about
-  normal: [1.5, 5.0]
-  hard: [4.0, 10.0]    # several plausible moves
-  long_think: [12.0, 25.0]
-  long_think_chance: 0.05   # share of hard middlegame moves that get a long think
+  book: [0.2, 0.8]     # seconds (min, max) for prepared opening moves
+  forced: [0.1, 0.5]   # only one legal move, or one move Maia is 95%+ sure about
+  obvious: [0.2, 1.0]  # recaptures and moves Maia is 80%+ sure about
+  follow_up: [0.3, 1.2]  # moving the same piece again right after moving it
+  normal: [1.0, 4.0]
+  hard_quick: [0.8, 2.5]   # hard moves are inconsistent: sometimes decided quickly...
+  hard: [3.0, 9.0]         # ...usually a few seconds...
+  long_think: [10.0, 25.0] # ...sometimes a long think
+  hard_quick_chance: 0.35
+  long_think_chance: 0.2
   # safety net: under 30 s on the clock it plays fast so it never loses on time
 
 assist:                # quality filter: only between Maia's own natural candidate moves

@@ -125,11 +125,15 @@ hard = _st.mean(think_seconds(150000, 0, 30, 0.25, 20, False, T, _r) for _ in ra
 book = max(think_seconds(180000, 0, 2, 1.0, 20, True, T, _r) for _ in range(300))
 panic = max(think_seconds(8000, 0, 60, 0.2, 20, False, T, _r) for _ in range(300))
 print(f"timing: obvious {obvious:.2f}s, hard {hard:.2f}s, book max {book:.2f}s, <10s max {panic:.2f}s", flush=True)
-assert obvious < hard and book <= 5.0 and panic <= 1.5
+assert obvious < hard and book <= 1.6 and panic <= 1.5
 # clock-independent: same difficulty, very different clocks -> similar time
 a = _st.mean(think_seconds(600000, 0, 30, 0.6, 20, False, T, _r) for _ in range(300))
 b = _st.mean(think_seconds(120000, 0, 30, 0.6, 20, False, T, _r) for _ in range(300))
 print(f'timing normal move: 10 min left {a:.2f}s, 2 min left {b:.2f}s', flush=True)
+rc = chess.Board(); [rc.push_san(x) for x in 'e4 d5 exd5'.split()]
+rec = _st.mean(think_seconds(150000, 0, 3, 0.6, 20, False, T, _r, board=rc, move=rc.parse_san('Qxd5')) for _ in range(300))
+print(f'timing recapture {rec:.2f}s', flush=True)
+assert rec < 1.5
 assert abs(a - b) < 1.0
 
 # Search test: after 3...Nf6?? the calculation sees Qxf7# (value for Black = 0).

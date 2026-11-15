@@ -152,7 +152,8 @@ class Bot:
                             mine = "w" if color == chess.WHITE else "b"
                             think = think_seconds(state.get(f"{mine}time"), state.get(f"{mine}inc"),
                                                   len(moves), top_prob, board.legal_moves.count(),
-                                                  opening is not None, self.cfg.get("timing", {}))
+                                                  opening is not None, self.cfg.get("timing", {}),
+                                                  board=board, move=move)
                             wait = think - (time.time() - t0)
                             if wait > 0:
                                 time.sleep(wait)
