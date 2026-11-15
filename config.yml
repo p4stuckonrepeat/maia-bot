@@ -17,11 +17,11 @@ search:                # light human-like calculation with Maia's own judgement 
   min_clock_seconds: 30
 
 style:                 # consistent playing style (one "person" across games)
-  enabled: false
-  name: positional     # solid structure, king safety, development, no speculative sacrifices
+  enabled: true
+  name: classical      # classical theory by phase (opening principles, Nimzowitsch, Steinitz, Capablanca/Tarrasch); or: positional
   strength: 1.5        # 0 = pure Maia, 1 = noticeable, 2+ = very consistent / predictable
   candidates: 8        # how many of Maia's most likely moves the style chooses between
-  min_relative_prob: 0.5  # style only picks moves at least half as likely as Maia's top choice
+  min_relative_prob: 0.25 # rules may pick moves at least a quarter as likely as Maia's top choice
 
 timing:                # human-like thinking time, based only on the move (not on the clock)
   enabled: true

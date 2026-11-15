@@ -112,6 +112,15 @@ for m in ["h2h3", "d7d6", "g2g4", "c8e6"]:
     pb2.push_uci(m)
 assert plan_score(pb2, chess.Move.from_uci("g4g5")) > plan_score(pb2, chess.Move.from_uci("a2a3"))
 print("plan tests ok", flush=True)
+# Classical style tests
+from bot.style import classical_score
+st0 = chess.Board()
+assert classical_score(st0, chess.Move.from_uci("e2e4")) > classical_score(st0, chess.Move.from_uci("a2a4"))
+eg = chess.Board("8/5k2/8/3P4/8/8/6K1/8 w - - 0 50")       # king and pawn endgame
+assert classical_score(eg, chess.Move.from_uci("g2f3")) > classical_score(eg, chess.Move.from_uci("g2h1"))
+assert classical_score(eg, chess.Move.from_uci("d5d6")) > 0                               # push the passed pawn
+rk = chess.Board("4k3/pp3ppp/8/8/8/8/PP3PPP/3RK3 w - - 0 25")
+print("classical tests ok", flush=True)
 styled = [maia.choose_styled(chess.Board(), cfg["maia"], cfg["style"], 2000)[0] for _ in range(20)]
 assert all(m in chess.Board().legal_moves for m in styled)
 print("style tests ok:", sorted(set(m.uci() for m in styled)), flush=True)

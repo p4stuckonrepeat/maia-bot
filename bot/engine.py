@@ -56,8 +56,13 @@ class Maia:
             mass += c["policy"] / total
             if mass >= float(maia_cfg["top_p"]):
                 break
-        weights = [(c["policy"] ** (1 / temp)) * math.exp(strength * score_fn(board, c["move"]))
-                   for c in pool]
+        def style_of(c):
+            w, d, _ = c.get("wdl", (0, 1000, 0))
+            try:
+                return score_fn(board, c["move"], (w + 0.5 * d) / 1000.0)
+            except TypeError:
+                return score_fn(board, c["move"])
+        weights = [(c["policy"] ** (1 / temp)) * math.exp(strength * style_of(c)) for c in pool]
         return random.choices([c["move"] for c in pool], weights=weights)[0], top, secs
 
 

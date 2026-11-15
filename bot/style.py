@@ -97,3 +97,141 @@ def positional_score(board, move):
 
 
 STYLES = {"positional": positional_score}
+
+
+# ---------------------------------------------------------------------------------------------
+# "classical": rules from classical chess theory, applied by game phase.
+#   Opening: classical principles (centre, development, castling, no early queen/flank pawns).
+#   Middlegame: Nimzowitsch (outposts, open files, 7th rank, blockade, prophylaxis) and
+#               Steinitz (keep the bishop pair, trade when ahead, attack only when better).
+#   Endgame: Capablanca/Tarrasch (active king, push passed pawns, rooks behind passed pawns).
+# ---------------------------------------------------------------------------------------------
+CENTER4 = [chess.D4, chess.E4, chess.D5, chess.E5]
+
+
+def material(board, color):
+    return sum(VALUE[p.piece_type] for p in board.piece_map().values() if p.color == color)
+
+
+def is_passed(board, sq, color):
+    f, r = chess.square_file(sq), chess.square_rank(sq)
+    for s in board.pieces(chess.PAWN, not color):
+        sf, sr = chess.square_file(s), chess.square_rank(s)
+        if abs(sf - f) <= 1 and ((sr > r) if color == chess.WHITE else (sr < r)):
+            return False
+    return True
+
+
+def phase(board):
+    non_pawn = sum(VALUE[p.piece_type] for p in board.piece_map().values()
+                   if p.piece_type not in (chess.PAWN, chess.KING))
+    if non_pawn <= 26:
+        return "endgame"
+    return "opening" if board.fullmove_number <= 10 else "middlegame"
+
+
+def opp_mobility(board):
+    """Legal moves the side NOT to move would have (null move), or None when in check."""
+    if board.is_check():
+        return None
+    board.push(chess.Move.null())
+    try:
+        return board.legal_moves.count()
+    finally:
+        board.pop()
+
+
+def classical_score(board, move, exp=None):
+    color, piece = board.turn, board.piece_type_at(move.from_square)
+    to, frm = move.to_square, move.from_square
+    rel_rank = chess.square_rank(to) if color == chess.WHITE else 7 - chess.square_rank(to)
+    captured = board.piece_type_at(to) or (chess.PAWN if board.is_en_passant(move) else None)
+    ph = phase(board)
+    s = 0.0
+
+    if ph == "opening":
+        if piece == chess.PAWN and to in CENTER4:
+            s += 0.3                                   # occupy the centre
+        if board.is_castling(move):
+            s += 0.4
+        if piece in (chess.KNIGHT, chess.BISHOP) and chess.square_rank(frm) == (0 if color else 7):
+            s += 0.25                                  # develop
+        stack = board.move_stack
+        if len(stack) >= 2 and frm == stack[-2].to_square and not captured:
+            s -= 0.2                                   # same piece twice in the opening
+        if piece == chess.QUEEN and not captured:
+            s -= 0.3                                   # early queen
+        if piece == chess.PAWN and chess.square_file(frm) in (0, 1, 6, 7) and not captured:
+            s -= 0.2                                   # flank pawns
+        if piece == chess.KING and not board.is_castling(move):
+            s -= 0.4
+
+    if ph != "endgame":
+        # Nimzowitsch: outposts, open files, 7th rank, blockade
+        if piece == chess.KNIGHT and 3 <= rel_rank <= 5:
+            enemy_pawn_can_hit = any(
+                abs(chess.square_file(p) - chess.square_file(to)) == 1 and
+                ((chess.square_rank(p) > chess.square_rank(to)) if color == chess.WHITE
+                 else (chess.square_rank(p) < chess.square_rank(to)))
+                for p in board.pieces(chess.PAWN, not color))
+            supported = any(board.piece_type_at(a) == chess.PAWN for a in board.attackers(color, to))
+            if not enemy_pawn_can_hit and supported:
+                s += 0.3
+        if piece == chess.ROOK:
+            f = chess.square_file(to)
+            own = any(chess.square_file(p) == f for p in board.pieces(chess.PAWN, color))
+            enemy = any(chess.square_file(p) == f for p in board.pieces(chess.PAWN, not color))
+            if not own and not enemy:
+                s += 0.25
+            elif not own:
+                s += 0.15
+            if rel_rank == 6:
+                s += 0.25
+        for p in board.pieces(chess.PAWN, not color):
+            if is_passed(board, p, not color):
+                stop = p + 8 if (not color) == chess.WHITE else p - 8   # square in front of it
+                if 0 <= stop < 64 and to == stop and piece != chess.PAWN:
+                    s += 0.25                          # blockade
+        # Steinitz: keep the bishop pair; trade when ahead, not when behind; attack only when better
+        if piece == chess.BISHOP and captured == chess.KNIGHT and len(board.pieces(chess.BISHOP, color)) == 2:
+            s -= 0.2
+        diff = material(board, color) - material(board, not color)
+        if captured and VALUE[captured] == VALUE[piece] and piece != chess.PAWN:
+            s += 0.2 if diff >= 2 else (-0.2 if diff <= -2 else 0)
+        king = board.king(not color)
+        if piece == chess.PAWN and king is not None and not captured and rel_rank >= 3 \
+                and abs(chess.square_file(to) - chess.square_file(king)) <= 1 and exp is not None:
+            s += 0.15 if exp > 0.6 else (-0.2 if exp < 0.5 else 0)
+        # prophylaxis: restrict the opponent
+        before = opp_mobility(board)
+        board.push(move)
+        try:
+            after = board.legal_moves.count()
+        finally:
+            board.pop()
+        if before is not None and before - after >= 3:
+            s += 0.1
+    else:
+        # Capablanca/Tarrasch endgame rules
+        if piece == chess.KING:
+            def cdist(sq):
+                return max(abs(chess.square_file(sq) - 3.5), abs(chess.square_rank(sq) - 3.5))
+            if cdist(to) < cdist(frm):
+                s += 0.25                              # activate the king
+        if piece == chess.PAWN and is_passed(board, frm, color):
+            s += 0.3                                   # passed pawns must be pushed
+        if piece == chess.ROOK:
+            for p in list(board.pieces(chess.PAWN, color)) + list(board.pieces(chess.PAWN, not color)):
+                pc = board.piece_at(p)
+                if chess.square_file(p) == chess.square_file(to) and is_passed(board, p, pc.color):
+                    behind = (chess.square_rank(to) < chess.square_rank(p)) if pc.color == chess.WHITE \
+                        else (chess.square_rank(to) > chess.square_rank(p))
+                    if behind:
+                        s += 0.2                       # rook behind the passed pawn
+                        break
+
+    # always: safety, structure, king shield, plan (from the positional style)
+    return s + positional_score(board, move) * 0.8
+
+
+STYLES["classical"] = classical_score
