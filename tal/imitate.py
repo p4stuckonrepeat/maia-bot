@@ -24,6 +24,7 @@ N_EVAL = int(os.environ.get("IMIT_EVAL_POSITIONS", "2500"))
 K = 12
 BOOK_PLIES = 30
 CKPT = os.environ.get("TAL_CKPT", "prev/tal-79m.pt")
+NAME = os.environ.get("IMIT_NAME", "tal")
 
 
 def key(board):
@@ -173,7 +174,7 @@ def main():
     s_train, s_hold = s_train[:N_TRAIN], s_hold[:N_EVAL]
 
     results = {}
-    for label, ckpt in [("normal Maia-3", None), ("Tal model", CKPT)]:
+    for label, ckpt in [("normal Maia-3", None), (f"{NAME} model", CKPT)]:
         args = ["--model", "maia3-79m"] + (["--checkpoint", ckpt] if ckpt else [])
         eng = Maia3UCIEngine(parse_args(args))
         eng.ensure_model_loaded()
@@ -181,12 +182,12 @@ def main():
         Xh, Yh, Ph = dataset(eng, hold, s_hold)
         base_w = torch.zeros(len(FEATURES)); base_w[0] = 1.0
         results[label] = match(Xh, Yh, base_w)
-        log(f"{label}: {results[label]:.1%} exact Tal moves on held-out games ({time.time() - t:.0f}s); "
+        log(f"{label}: {results[label]:.1%} exact player moves on held-out games ({time.time() - t:.0f}s); "
             f"Tal's move among top {K}: {sum(y >= 0 for y in Yh) / len(Yh):.1%}")
     # eng is now the Tal model: learn the rule weights on training games
     Xt, Yt, _ = dataset(eng, train, s_train)
     w = fit(Xt, Yt)
-    results["Tal model + learned rules"] = match(Xh, Yh, w)
+    results[f"{NAME} model + learned rules"] = match(Xh, Yh, w)
     # book from the training games only (fair test), then check held-out positions it covers
     book = build_book(train)
     hit = 0
@@ -196,13 +197,13 @@ def main():
             hit += int(max(book[side][k], key=book[side][k].get) == tal_uci)
         else:
             hit += int(y >= 0 and int((torch.tensor(x) @ w).argmax()) == y)
-    results["+ Tal's own opening book"] = hit / len(Ph)
+    results[f"+ {NAME}'s own opening book"] = hit / len(Ph)
 
     weights = {n: round(float(v), 4) for n, v in zip(FEATURES, w)}
-    json.dump({"features": FEATURES, "weights": weights, "results": results}, open("tal/tal-rules.json", "w"), indent=1)
-    json.dump(build_book(games), open("book-tal.json", "w"), separators=(",", ":"))
-    lines = ["## Tal imitation", f"{len(s_hold)} positions from {len(hold)} Tal games the bot never saw", "",
-             "| Version | Plays exactly Tal's move |", "|---|---|"] + \
+    json.dump({"features": FEATURES, "weights": weights, "results": results}, open(f"tal/{NAME}-rules.json", "w"), indent=1)
+    json.dump(build_book(games), open(f"book-{NAME}.json", "w"), separators=(",", ":"))
+    lines = [f"## {NAME} imitation", f"{len(s_hold)} positions from {len(hold)} {NAME} games the bot never saw", "",
+             "| Version | Plays exactly the player's move |", "|---|---|"] + \
             [f"| {k} | {v:.1%} |" for k, v in results.items()] + ["", "Learned rule weights:", "```",
              json.dumps(weights, indent=1), "```"]
     text = "\n".join(lines)

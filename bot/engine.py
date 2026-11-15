@@ -49,7 +49,8 @@ class Maia:
         score_fn = STYLES[style_cfg.get("name", "positional")]
         if style_cfg.get("name") == "tal_learned":   # weights fitted on Tal's games decide everything
             from bot.style import tal_learned_logit
-            logits = [tal_learned_logit(board, c) for c in top]
+            rules = style_cfg.get("rules_file", "tal/tal-rules.json")
+            logits = [tal_learned_logit(board, c, rules) for c in top]
             temp = max(0.05, float(maia_cfg["temperature"]))
             mx = max(logits)
             weights = [math.exp((l - mx) / temp) for l in logits]

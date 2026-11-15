@@ -10,7 +10,7 @@ on:
         default: "2500"
       profile:
         type: choice
-        options: [normal, tal]
+        options: [normal, tal, hikaru]
         default: normal
 jobs:
   match:
@@ -31,16 +31,16 @@ jobs:
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements.txt git+https://github.com/CSSLab/maia3@1e13597c42d4858b7cfd7cfdae01e297263364b2
           maia3-cache --model maia3-79m
-      - name: Get Tal model
-        if: ${{ inputs.profile == 'tal' }}
+      - name: Get player model
+        if: ${{ inputs.profile != 'normal' }}
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release download tal-model -p tal-79m.pt
+        run: gh release download "${{ inputs.profile }}-model" -p "${{ inputs.profile }}-79m.pt"
       - name: Play
         env:
           MATCH_GAMES: ${{ inputs.games }}
           MATCH_SF_ELO: ${{ inputs.sf_elo }}
-          BOT_CONFIG: ${{ inputs.profile == 'tal' && 'config-tal.yml' || 'config.yml' }}
+          BOT_CONFIG: ${{ inputs.profile == 'normal' && 'config.yml' || format('config-{0}.yml', inputs.profile) }}
         run: python -u -m tools.match
       - uses: actions/upload-artifact@v4
         with:

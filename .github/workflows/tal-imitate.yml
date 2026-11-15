@@ -1,7 +1,16 @@
-name: "Tal: learn rules + book, measure closeness"
+name: "Player imitation: learn rules + book, measure closeness"
 on:
   workflow_dispatch:
     inputs:
+      player:
+        description: "tal | chesscom:<user>:<classes>"
+        default: "tal"
+      name:
+        description: "Name (uses release <name>-model, writes book-<name>.json)"
+        default: "tal"
+      max_games:
+        description: "Same game limit as used for training (0 = all)"
+        default: "0"
       train_positions:
         default: "6000"
       eval_positions:
@@ -29,19 +38,24 @@ jobs:
       - name: Get Tal model
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release download tal-model -p tal-79m.pt -D prev
+        run: gh release download "${{ inputs.name }}-model" -p "${{ inputs.name }}-79m.pt" -D prev
       - name: Learn and measure
         env:
           IMIT_TRAIN_POSITIONS: ${{ inputs.train_positions }}
           IMIT_EVAL_POSITIONS: ${{ inputs.eval_positions }}
+          PLAYER: ${{ inputs.player }}
+          PLAYER_MAX_GAMES: ${{ inputs.max_games }}
+          IMIT_NAME: ${{ inputs.name }}
+          TAL_CKPT: prev/${{ inputs.name }}-79m.pt
         run: python -u -m tal.imitate
       - name: Save rules and Tal book to the repo
         run: |
-          cp tal/tal-rules.json /tmp/ && cp book-tal.json /tmp/
+          N="${{ inputs.name }}"
+          cp tal/$N-rules.json /tmp/ && cp book-$N.json /tmp/
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin ${{ github.ref_name }} && git reset --hard origin/${{ github.ref_name }}
-          cp /tmp/tal-rules.json tal/ && cp /tmp/book-tal.json .
-          git add tal/tal-rules.json book-tal.json
-          git commit -m "Tal: learned rules and opening book" || echo "no changes"
+          cp /tmp/$N-rules.json tal/ && cp /tmp/book-$N.json .
+          git add tal/$N-rules.json book-$N.json
+          git commit -m "$N: learned rules and opening book" || echo "no changes"
           git push

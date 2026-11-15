@@ -1,0 +1,98 @@
+# HIKARU PROFILE: plays as close to Hikaru Nakamura as we can measure. Maia-3 Lichess bot settings. Edit on github.com; most changes apply within ~30 s, even mid-session.
+
+maia:
+  model: maia3-79m     # (model change needs a restart)
+  checkpoint: hikaru-79m.pt   # Maia-3 79M fine-tuned on Hikaru's blitz/rapid games (downloaded at start)
+  elo: 2600            # rating Maia imitates (trained range 600-2600)
+  temperature: 0.6     # 0 = always most likely move, 1 = full human randomness
+  top_p: 1.0           # only sample from the most likely moves covering this probability
+  oppo_elo: 2600       # opponent rating Maia assumes; "opponent" = real rating (plays sloppier vs weak players)
+
+search:                # light human-like calculation with Maia's own judgement (no Stockfish)
+  enabled: false
+  candidates: 4        # natural moves considered (Maia's most likely)
+  depth: 1             # 1 = check the opponent's likely replies; 2 = also our answer (slower)
+  widths: [3, 2]       # replies considered at each level
+  margin: 0.10         # moves within 10% expected score of the best line stay eligible
+  skip_if_prob: 0.9    # don't calculate when one move is obvious
+  min_clock_seconds: 30
+
+style:                 # consistent playing style (one "person" across games)
+  enabled: true
+  name: tal_learned  # learned style rules (weights fitted on the player's games)
+  rules_file: tal/hikaru-rules.json
+  strength: 2.0        # 0 = pure Maia, 1 = noticeable, 2+ = very consistent / predictable
+  candidates: 12       # Maia's moves the Tal rules choose between
+  min_relative_prob: 0.25 # rules may pick moves at least a quarter as likely as Maia's top choice
+
+timing:                # human-like thinking time, based only on the move (not on the clock)
+  enabled: true
+  speed: 1.0           # multiplies all times: 1.5 = slower, 0.7 = faster
+  book: [0.2, 0.8]     # seconds (min, max) for prepared opening moves
+  forced: [0.1, 0.5]   # only one legal move, or one move Maia is 95%+ sure about
+  obvious: [0.2, 1.0]  # recaptures and moves Maia is 80%+ sure about
+  follow_up: [0.3, 1.2]  # moving the same piece again right after moving it
+  normal: [1.0, 4.0]
+  hard_quick: [0.8, 2.5]   # hard moves are inconsistent: sometimes decided quickly...
+  hard: [3.0, 9.0]         # ...usually a few seconds...
+  long_think: [10.0, 25.0] # ...sometimes a long think
+  hard_quick_chance: 0.35
+  long_think_chance: 0.2
+  # safety net: under 30 s on the clock it plays fast so it never loses on time
+
+assist:                # quality filter: only between Maia's own natural candidate moves
+  enabled: false        # stops clearly inferior choices (e.g. a 5% move when a 55% move is much better)
+  only_when_not_top: true  # never touch Maia's own first choice (keeps human inaccuracies)
+  max_loss_cp: 150     # allowed gap to the best natural candidate (150 = 1.5 pawns)
+  min_prob: 0.03       # candidates Maia gives at least 3% are considered
+  depth: 12
+
+guard:                 # Stockfish blunder guard. Maia still chooses every move.
+  enabled: true        # true = ON, false = OFF (applies mid-game within ~30 s)
+  playable_cp: -150    # only check moves when the position is at least this good for the bot
+  lost_cp: -250        # veto a move only if it leaves the bot at this evaluation or worse...
+  min_drop_cp: 300     # ...and it costs at least this much
+  winning_cp: 150      # when the bot is winning (+1.5 or more)...
+  winning_floor_cp: -50  # ...it may drop to about equal, but never into a losing position
+  depth: 14            # Stockfish search depth for the check
+  replace_with: softer_mistake  # softer_mistake = play a smaller mistake instead; maia_next = Maia's next safe move
+  softer_drop_cp: 300  # the smaller mistake aims ~3 pawns below the position before...
+  softer_target_cp: 0  # ...but at most "equal" (0), so a winning position becomes about equal
+  min_clock_seconds: 15  # skip the check when the bot's clock is lower than this
+
+challenges:
+  variants: [standard]
+  min_base_seconds: 180   # 3+0 minimum
+  max_base_seconds: 900   # 15 min maximum
+  max_increment: 10
+  accept_unlimited: true  # games without a clock
+  accept_rated: true
+  accept_casual: true
+  accept_humans: true
+  accept_bots: true
+  max_games: 1            # games at the same time
+
+session:
+  stop_accepting_minutes_before_end: 20
+
+openings:
+  # weight > 0 = preferred (chosen by weight). weight 0 = only used when no preferred
+  # opening fits the game (e.g. after the opponent's first move). Lines: our moves and the
+  # opponent's moves in order; "*" = any common opponent move. Deep lines live in book.json.
+  white:
+    ruy_lopez:           {weight: 100, line: "e2e4 e7e5 g1f3 b8c6 f1b5", budget: 1000}
+    italian:             {weight: 0, line: "e2e4 e7e5 g1f3 b8c6 f1c4", budget: 60}
+    queens_gambit:       {weight: 0, line: "d2d4 d7d5 c2c4", budget: 60}
+    london:              {weight: 0, line: "d2d4 * c1f4", budget: 60}
+    english:             {weight: 0, line: "c2c4", budget: 60}
+    kings_indian_attack: {weight: 0, line: "g1f3 * g2g3 * f1g2", budget: 60}
+  black:
+    sicilian:            {weight: 100, line: "e2e4 c7c5", budget: 1000}
+    caro_kann:           {weight: 0, line: "e2e4 c7c6", budget: 60}
+    french:              {weight: 0, line: "e2e4 e7e6", budget: 60}
+    e5_and_ruy_lopez:    {weight: 0, line: "e2e4 e7e5", budget: 150}
+    kings_indian:        {weight: 100, line: "d2d4 g8f6 * g7g6 * f8g7 * d7d6", budget: 700}
+    queens_gambit_declined: {weight: 0, line: "d2d4 d7d5 c2c4 e7e6", budget: 60}
+  book:
+    enabled: true
+    path: book-hikaru.json   # Hikaru's own openings from his games

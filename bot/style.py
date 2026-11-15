@@ -243,12 +243,14 @@ STYLES["classical"] = classical_score
 _TAL = {}
 
 
-def tal_learned_logit(board, cand):
+def tal_learned_logit(board, cand, rules_file="tal/tal-rules.json"):
     import json
     import os
-    if not _TAL:
-        path = os.path.join(os.path.dirname(__file__), "..", "tal", "tal-rules.json")
+    if _TAL.get("_file") != rules_file:
+        _TAL.clear()
+        path = os.path.join(os.path.dirname(__file__), "..", rules_file)
         _TAL.update(json.load(open(path)))
+        _TAL["_file"] = rules_file
     from tal.imitate import features
     w, d, _ = cand.get("wdl", (0, 1000, 0))
     f = features(board, cand["move"], cand["policy"], (w + 0.5 * d) / 1000)
