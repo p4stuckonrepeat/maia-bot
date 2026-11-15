@@ -1,0 +1,54 @@
+name: "Tal: train model"
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: "Training time in minutes (max ~320)"
+        default: "320"
+      resume:
+        description: "Continue from the last saved Tal model"
+        type: boolean
+        default: true
+      save:
+        description: "Save the result as the Tal model (GitHub release)"
+        type: boolean
+        default: true
+permissions:
+  contents: write
+concurrency:
+  group: tal-train
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: maia3-79m
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt git+https://github.com/CSSLab/maia3@1e13597c42d4858b7cfd7cfdae01e297263364b2
+          maia3-cache --model maia3-79m
+      - name: Get previous Tal model
+        if: ${{ inputs.resume }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download tal-model -p tal-79m.pt -D prev || echo "no previous model yet"
+      - name: Train
+        env:
+          TAL_MINUTES: ${{ inputs.minutes }}
+          TAL_RESUME: prev/tal-79m.pt
+        run: python -u -m tal.train
+      - name: Save as release
+        if: ${{ inputs.save }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view tal-model >/dev/null 2>&1 || gh release create tal-model --title "Tal model" --notes "Maia-3 79M fine-tuned on Mikhail Tal's games"
+          gh release upload tal-model tal-79m.pt tal-info.json --clobber
