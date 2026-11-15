@@ -21,7 +21,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: tal-train
+  group: tal-train-${{ inputs.player }}
 jobs:
   train:
     runs-on: ubuntu-latest
