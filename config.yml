@@ -24,7 +24,9 @@ mcts:                  # real calculation, Leela-style, with Maia only (no Stock
   max_clock_share: 0.04  # never more than 4% of the remaining clock on one move
   max_nodes: 400       # positions looked at, at most
   width: 6             # candidate moves per position (only natural, human moves)
-  root_width: 8
+  root_width: 10
+  batch: 8             # positions evaluated per network call (faster on CPU)
+  fpu_reduction: 0.1
   max_depth: 6         # calculation horizon in plies (3 moves each), like a strong human
   cpuct: 1.5
   sharpness: 0.5       # opponent assumed to answer like a strong human

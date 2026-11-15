@@ -172,7 +172,7 @@ for m in ["e2e4", "c7c5", "g1f3", "d7d6", "d2d4", "c5d4", "f3d4", "g8f6", "b1c3"
 stop = maia.choose(sic, cfg["maia"], candidates=8)[1]
 _t0 = __import__("time").time()
 smove, snote = mc.think(sic, stop[0]["move"], stop, mcfg_, 2600, 2600, 3)
-print(f"calc test 2 (speed): {mc.calls} positions in {__import__('time').time() - _t0:.1f}s, "
+print(f"calc test 2 (speed): {mc.evals} positions in {__import__('time').time() - _t0:.1f}s, "
       f"played {sic.san(smove)} | {snote}", flush=True)
 assert smove in sic.legal_moves
 
