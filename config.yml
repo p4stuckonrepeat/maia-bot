@@ -8,7 +8,7 @@ maia:
   oppo_elo: 2600       # opponent rating Maia assumes; "opponent" = real rating (plays sloppier vs weak players)
 
 search:                # light human-like calculation with Maia's own judgement (no Stockfish)
-  enabled: true
+  enabled: false
   candidates: 4        # natural moves considered (Maia's most likely)
   depth: 1             # 1 = check the opponent's likely replies; 2 = also our answer (slower)
   widths: [3, 2]       # replies considered at each level
