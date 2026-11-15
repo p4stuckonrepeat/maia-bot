@@ -35,7 +35,9 @@ class Maia:
             e.temperature, e.top_p = float(maia_cfg["temperature"]), float(maia_cfg["top_p"])
             e.multipv = max(1, min(20, candidates))
             moves = " ".join(m.uci() for m in board.move_stack)
-            e.cmd_position("position startpos" + (f" moves {moves}" if moves else ""))
+            root = board.root().fen()
+            base = "position startpos" if root == chess.STARTING_FEN else f"position fen {root}"
+            e.cmd_position(base + (f" moves {moves}" if moves else ""))
             t = time.time()
             move, top = e.score_moves()
             return move, top, time.time() - t

@@ -96,7 +96,9 @@ def candidates(eng, board):
     e.self_elo = e.oppo_elo = 2600
     e.multipv = K
     moves = " ".join(m.uci() for m in board.move_stack)
-    e.cmd_position("position startpos" + (f" moves {moves}" if moves else ""))
+    root = board.root().fen()
+    base = "position startpos" if root == chess.STARTING_FEN else f"position fen {root}"
+    e.cmd_position(base + (f" moves {moves}" if moves else ""))
     _, top = e.score_moves()
     return top
 
