@@ -76,6 +76,15 @@ class MCTS:
                     idx.append(j)
             if not moves:
                 continue
+            for m in moves:              # a mate in one is seen instantly, like a human would
+                b.push(m)
+                mate = b.is_checkmate()
+                b.pop()
+                if mate:
+                    node.v, node.terminal = 1.0, True
+                    break
+            if node.terminal:
+                continue
             p = torch.softmax(logits_move[i][idx], dim=-1)
             order = torch.argsort(p, descending=True)[:width].tolist()
             node.children = [Child(moves[k], float(p[k])) for k in order]
@@ -93,7 +102,6 @@ class MCTS:
         batch, max_nodes = int(cfg.get("batch", 8)), int(cfg.get("max_nodes", 400))
         me = board.turn
         t0, self.calls, self.evals = time.time(), 0, 0
-        self.natlog = []
         with self.maia.lock:   # Maia's own history of the real game (set by the last choose() call)
             moves = " ".join(m.uci() for m in board.move_stack)
             r = board.root().fen()
@@ -102,6 +110,13 @@ class MCTS:
             root_hist = deque(e.history, maxlen=e.cfg.history)
         root = Node(root_hist)
         self._evaluate([(board, root, bot_elo, opp_elo)], max(width, int(cfg.get("root_width", 10))))
+        if root.terminal:            # mate in one on the board: any 2500 player plays it
+            for m in board.legal_moves:
+                board.push(m)
+                mate = board.is_checkmate()
+                board.pop()
+                if mate:
+                    return m, (None if m == natural else f"calc: mate {board.san(m)}")
         if not root.children:
             return natural, None
         raw = {ch.move: ch.prior for ch in root.children}
@@ -158,8 +173,6 @@ class MCTS:
                         nd.children = []          # calculation horizon: value only, no deeper look
             for path in paths:
                 v = 1.0 - path[-1][1].node.v      # value for the side that played the last move
-                if path[0][1] is nat_child:
-                    self.natlog.append((len(path), round(v, 2)))
                 for nd, ch in reversed(path):
                     ch.vl -= 1
                     ch.n += 1
@@ -185,7 +198,7 @@ class MCTS:
             b2 = board.copy(stack=False); b2.push(ch.move)
             return [(b2.san(k.move), round(k.prior, 2), k.n, round(k.w / k.n, 2) if k.n else None) for k in ch.node.children[:3]] + [ch.node.ready, ch.node.horizon, round(ch.node.v, 2)]
         self.last = [(board.san(ch.move), ch.n, round(q(ch), 3), round(raw.get(ch.move, 0), 3), kids_of(ch))
-                     for ch in sorted(root.children, key=lambda ch: -ch.n)] + [("evals", self.evals, round(root.v, 3), 0, self.natlog)]
+                     for ch in sorted(root.children, key=lambda ch: -ch.n)] + [("evals", self.evals, round(root.v, 3), 0, "")]
         nat = next((ch for ch in allowed if ch.move == natural), None)
         margin = float(cfg.get("margin", 0.05))
         spent = time.time() - t0
