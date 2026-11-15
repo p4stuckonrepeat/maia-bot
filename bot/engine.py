@@ -232,6 +232,26 @@ class Guard:
         return pick, (f"assist: {board.san(move)} ({scores[move]:+}) -> Maia's "
                       f"{board.san(pick)} ({scores[pick]:+})")
 
+    def brilliant(self, board, move, top, bcfg):
+        """Sacrifice hunter on its own (Tal mode): if a natural candidate sacrifices material and the
+        position after it is still at least `min_eval_cp` (about equal), play it. Return (move, note or None)."""
+        color, depth = board.turn, int(bcfg.get("depth", 12))
+        cands = [c for c in top if c["policy"] >= float(bcfg.get("min_prob", 0.02))]
+        if not cands:
+            return move, None
+        with self.lock:
+            sacs = []
+            for c in cands:
+                # cheap pre-check: only moves that leave material hanging or capture with a bigger piece
+                sc, pv = self.after_pv(board, c["move"], color, depth)
+                if sc >= float(bcfg.get("min_eval_cp", -30)) and self.sacrifice(board, c["move"], pv):
+                    sacs.append((c, sc))
+        if not sacs or random.random() >= float(bcfg.get("chance", 1.0)):
+            return move, None
+        c, sc = random.choices(sacs, weights=[c["policy"] + 0.01 for c, _ in sacs])[0]
+        return c["move"], f"sacrifice: {board.san(c['move'])} ({sc:+})" + (
+            "" if c["move"] == move else f" instead of {board.san(move)}")
+
     def close(self):
         try:
             self.sf.quit()

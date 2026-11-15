@@ -70,6 +70,13 @@ assist:                # quality filter: only between Maia's own natural candida
   brilliant_chance: 0.85   # if a natural candidate sacrifices material and Stockfish rates it (nearly) best, play it this often
   brilliant_margin_cp: 40  # "nearly best" = at most 0.4 pawns below the best natural candidate
 
+brilliant:             # Tal mode: always go for sacrifices that keep the position at least equal
+  enabled: true
+  chance: 1.0          # 1.0 = always, if a sound sacrifice is among the natural moves
+  min_eval_cp: -30     # position after the sacrifice must be at least equal (Stockfish, -0.3 or better)
+  min_prob: 0.02       # only moves Maia gives 2%+ (a human could find them)
+  depth: 12
+
 guard:                 # Stockfish blunder guard. Maia still chooses every move.
   enabled: true        # true = ON, false = OFF (applies mid-game within ~30 s)
   playable_cp: -150    # only check moves when the position is at least this good for the bot

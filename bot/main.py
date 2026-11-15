@@ -273,6 +273,13 @@ class Bot:
         if self.guard is None or low_clock:
             return move, calc_note, None, top_prob
         notes = [calc_note] if calc_note else []
+        bcfg = self.cfg.get("brilliant", {})
+        if bcfg.get("enabled"):
+            if len(top) < 2:
+                top = self.maia.choose(board, mcfg, opp_rating, candidates=10)[1]
+            move, n = self.guard.brilliant(board, move, top, bcfg)
+            if n:
+                notes.append(n)
         acfg = self.cfg.get("assist", {})
         if acfg.get("enabled"):
             if len(top) < 2:
