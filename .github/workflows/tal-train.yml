@@ -2,6 +2,11 @@ name: "Tal: train model"
 on:
   workflow_dispatch:
     inputs:
+      player:
+        description: "tal | chesscom:<user>:<classes>"
+        default: "tal"
+      max_games:
+        default: "0"
       minutes:
         description: "Training time in minutes (max ~320)"
         default: "320"
@@ -43,6 +48,9 @@ jobs:
       - name: Train
         env:
           TAL_MINUTES: ${{ inputs.minutes }}
+          PLAYER: ${{ inputs.player }}
+          PLAYER_MAX_GAMES: ${{ inputs.max_games }}
+          TAL_EVAL: "300"
           TAL_RESUME: prev/tal-79m.pt
         run: python -u -m tal.train
       - name: Save as release (only if it predicts Tal better than before)
