@@ -18,27 +18,27 @@
   "safety"
  ],
  "weights": {
-  "logp": 0.9656,
-  "exp": 0.7887,
-  "capture": -0.1886,
-  "check": 0.4619,
-  "sacrifice": -0.1302,
-  "king_pressure": -0.605,
-  "near_king": 0.2782,
-  "pawn_storm": -0.3146,
-  "mobility": -0.3875,
-  "retreat": 0.3908,
-  "queen_trade": -0.016,
-  "castle": 0.1325,
-  "develop": -0.1626,
-  "center_pawn": 0.2272,
-  "pawn_break": -0.1405,
-  "safety": 0.8899
+  "logp": 0.9791,
+  "exp": 0.3246,
+  "capture": 0.0225,
+  "check": -0.0297,
+  "sacrifice": -0.0275,
+  "king_pressure": -0.006,
+  "near_king": -0.0563,
+  "pawn_storm": 0.0377,
+  "mobility": -0.052,
+  "retreat": -0.0299,
+  "queen_trade": 0.0232,
+  "castle": 0.0755,
+  "develop": -0.0835,
+  "center_pawn": -0.0214,
+  "pawn_break": 0.0443,
+  "safety": 0.0429
  },
  "results": {
-  "normal Maia-3": 0.625,
-  "Tal model": 0.7,
-  "Tal model + learned rules": 0.65,
-  "+ Tal's own opening book": 0.65
+  "normal Maia-3": 0.562,
+  "Tal model": 0.5632,
+  "Tal model + learned rules": 0.5652,
+  "+ Tal's own opening book": 0.5744
  }
 }
