@@ -176,6 +176,8 @@ class MCTS:
             seen = [ch for ch in allowed if ch.n and ch is not nat_child]
         seen = seen + [nat_child] if nat_child in allowed and nat_child.n else (seen or allowed)
         best = max(seen, key=q)
+        self.last = [(board.san(ch.move), ch.n, round(q(ch), 3), round(raw.get(ch.move, 0), 3))
+                     for ch in sorted(root.children, key=lambda ch: -ch.n)] + [("evals", self.evals, round(root.v, 3), 0)]
         nat = next((ch for ch in allowed if ch.move == natural), None)
         margin = float(cfg.get("margin", 0.05))
         spent = time.time() - t0

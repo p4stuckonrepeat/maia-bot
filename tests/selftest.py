@@ -176,7 +176,7 @@ for m in ["e2e4", "e7e5", "d1h5", "b8c6", "f1c4"]:
     mb.push_uci(m)
 mtop = maia.choose(mb, cfg["maia"], candidates=8)[1]
 mmove, mnote = mc.think(mb, chess.Move.from_uci("g8f6"), mtop, mcfg_, 2600, 2600, 3)
-print("calc test 1:", mb.san(mmove), "|", mnote, flush=True)
+print("calc test 1:", mb.san(mmove), "|", mnote, "|", mc.last, flush=True)
 assert mmove != chess.Move.from_uci("g8f6")
 sic = chess.Board()
 for m in ["e2e4", "c7c5", "g1f3", "d7d6", "d2d4", "c5d4", "f3d4", "g8f6", "b1c3", "a7a6", "c1e3", "e7e5", "d4b3"]:
