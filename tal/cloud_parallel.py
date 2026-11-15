@@ -25,7 +25,7 @@ VARIANTS = {   # blocks, lr, epochs, minutes
 
 
 def run(env_extra):
-    env = {**os.environ, "TAL_BATCH": "256", "TAL_EVAL": "3000", "TAL_EVAL_EVERY": "300", **env_extra}
+    env = {**os.environ, "TAL_BATCH": "256", "TAL_WORKERS": "12", "TAL_EVAL": "3000", "TAL_EVAL_EVERY": "300", **env_extra}
     p = subprocess.run(["python", "-u", "-m", "tal.train"], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     print(p.stdout, flush=True)
     if p.returncode != 0:

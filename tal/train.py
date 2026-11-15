@@ -199,9 +199,17 @@ class PosDataset(torch.utils.data.Dataset):
         return t, m, -1 if y is None else y, v
 
 
+try:
+    _CPUS = len(os.sched_getaffinity(0))
+except Exception:
+    _CPUS = os.cpu_count() or 2
+WORKERS = max(1, min(int(os.environ.get("TAL_WORKERS", "8")), _CPUS))   # cloud machines report hundreds of host CPUs
+torch.multiprocessing.set_sharing_strategy("file_system")
+
+
 def loader(enc, games, items, bs, shuffle):
     return torch.utils.data.DataLoader(PosDataset(enc, games, items), batch_size=bs, shuffle=shuffle,
-                                       num_workers=max(1, (os.cpu_count() or 2)), pin_memory=DEVICE == "cuda",
+                                       num_workers=WORKERS, pin_memory=DEVICE == "cuda",
                                        persistent_workers=False)
 
 
