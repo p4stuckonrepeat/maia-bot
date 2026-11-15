@@ -93,6 +93,7 @@ class MCTS:
         batch, max_nodes = int(cfg.get("batch", 8)), int(cfg.get("max_nodes", 400))
         me = board.turn
         t0, self.calls, self.evals = time.time(), 0, 0
+        self.natlog = []
         with self.maia.lock:   # Maia's own history of the real game (set by the last choose() call)
             moves = " ".join(m.uci() for m in board.move_stack)
             r = board.root().fen()
@@ -157,6 +158,8 @@ class MCTS:
                         nd.children = []          # calculation horizon: value only, no deeper look
             for path in paths:
                 v = 1.0 - path[-1][1].node.v      # value for the side that played the last move
+                if path[0][1] is nat_child:
+                    self.natlog.append((len(path), round(v, 2)))
                 for nd, ch in reversed(path):
                     ch.vl -= 1
                     ch.n += 1
@@ -180,9 +183,9 @@ class MCTS:
             if ch.node is None:
                 return "-"
             b2 = board.copy(stack=False); b2.push(ch.move)
-            return [(b2.san(k.move), round(k.prior, 2), k.n) for k in ch.node.children[:3]] + [ch.node.ready, ch.node.horizon, round(ch.node.v, 2)]
+            return [(b2.san(k.move), round(k.prior, 2), k.n, round(k.w / k.n, 2) if k.n else None) for k in ch.node.children[:3]] + [ch.node.ready, ch.node.horizon, round(ch.node.v, 2)]
         self.last = [(board.san(ch.move), ch.n, round(q(ch), 3), round(raw.get(ch.move, 0), 3), kids_of(ch))
-                     for ch in sorted(root.children, key=lambda ch: -ch.n)] + [("evals", self.evals, round(root.v, 3), 0, "")]
+                     for ch in sorted(root.children, key=lambda ch: -ch.n)] + [("evals", self.evals, round(root.v, 3), 0, self.natlog)]
         nat = next((ch for ch in allowed if ch.move == natural), None)
         margin = float(cfg.get("margin", 0.05))
         spent = time.time() - t0
