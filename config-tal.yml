@@ -18,7 +18,7 @@ search:                # light human-like calculation with Maia's own judgement 
   min_clock_seconds: 30
 
 mcts:                  # real calculation, Leela-style, with Maia only (no Stockfish), kept human
-  enabled: true
+  enabled: false
   max_seconds: 3       # thinking budget on normal moves (part of the human move time, not extra)
   hard_seconds: 7      # budget on hard moves (Maia unsure: top move under 35%)
   hard_below: 0.35
@@ -61,7 +61,7 @@ timing:                # human-like thinking time, based only on the move (not o
   # safety net: under 30 s on the clock it plays fast so it never loses on time
 
 assist:                # quality filter: only between Maia's own natural candidate moves
-  enabled: true         # stops clearly worse choices when a natural alternative is much better
+  enabled: false         # stops clearly worse choices when a natural alternative is much better
   only_when_not_top: false # also checks Maia's own first choice (with more freedom, below)
   max_loss_cp: 200     # only replace moves that are 2+ pawns worse than a natural alternative (real blunders)
   top_max_loss_cp: 300 # Maia's own first choice: only if 3+ pawns worse
