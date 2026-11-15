@@ -9,6 +9,7 @@ import chess
 from bot.book import Book
 from bot.engine import Guard, Maia
 from bot.search import Search
+from bot.mcts import MCTS
 from bot.lichess import Lichess
 from bot.settings import Settings
 from bot.timing import think_seconds
@@ -25,6 +26,7 @@ class Bot:
         self.settings, self.api, self.maia, self.guard, self.me = settings, api, maia, guard, me
         self.book = book or Book()
         self.search = Search(maia)
+        self.mcts = MCTS(maia)
         self.lock = threading.Lock()
         self.active = set()     # game ids being played
         self.pending = {}       # challenge id -> accept time (game not started yet)
@@ -255,6 +257,18 @@ class Bot:
         if move is None:
             move, top, _ = self.maia.choose(board, mcfg, opp_rating)
         top_prob = max((c["policy"] for c in top), default=0.5)
+        mc = self.cfg.get("mcts", {})
+        if mc.get("enabled") and calc_note is None and top_prob < float(mc.get("skip_if_prob", 0.85)) and \
+                (clock is None or clock > mc.get("min_clock_seconds", 45) * 1000):
+            budget = float(mc.get("hard_seconds", 7) if top_prob < float(mc.get("hard_below", 0.35))
+                           else mc.get("max_seconds", 3))
+            if clock is not None:
+                budget = min(budget, clock / 1000 * float(mc.get("max_clock_share", 0.04)))
+            fixed = mcfg.get("oppo_elo", "opponent")
+            opp = int(min(2600, max(600, fixed if isinstance(fixed, (int, float)) else (opp_rating or mcfg["elo"]))))
+            if len(top) < 2:
+                top = self.maia.choose(board, mcfg, opp_rating, candidates=8)[1]
+            move, calc_note = self.mcts.think(board, move, top, mc, int(mcfg["elo"]), opp, budget)
         low_clock = clock is not None and clock < gcfg.get("min_clock_seconds", 15) * 1000
         if self.guard is None or low_clock:
             return move, calc_note, None, top_prob

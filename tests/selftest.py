@@ -155,6 +155,27 @@ for m in ["e2e4", "e7e5", "d1h5", "b8c6", "f1c4", "g8f6"]:
 v_white = sr.value(sb, 1, (2600, 2600), [3])
 print("search test: value of 3...Nf6 for Black =", round(1 - v_white, 2), flush=True)
 assert 1 - v_white < 0.05
+# Calculation (Leela-style, Maia only): the natural-looking 3...Nf6?? must be changed (Qxf7#).
+from bot.mcts import MCTS
+mc = MCTS(maia)
+mcfg_ = dict(cfg.get("mcts", {}) or {"enabled": True})
+mb = chess.Board()
+for m in ["e2e4", "e7e5", "d1h5", "b8c6", "f1c4"]:
+    mb.push_uci(m)
+mtop = maia.choose(mb, cfg["maia"], candidates=8)[1]
+mmove, mnote = mc.think(mb, chess.Move.from_uci("g8f6"), mtop, mcfg_, 2600, 2600, 3)
+print("calc test 1:", mb.san(mmove), "|", mnote, flush=True)
+assert mmove != chess.Move.from_uci("g8f6")
+sic = chess.Board()
+for m in ["e2e4", "c7c5", "g1f3", "d7d6", "d2d4", "c5d4", "f3d4", "g8f6", "b1c3", "a7a6", "c1e3", "e7e5", "d4b3"]:
+    sic.push_uci(m)
+stop = maia.choose(sic, cfg["maia"], candidates=8)[1]
+_t0 = __import__("time").time()
+smove, snote = mc.think(sic, stop[0]["move"], stop, mcfg_, 2600, 2600, 3)
+print(f"calc test 2 (speed): {mc.calls} positions in {__import__('time').time() - _t0:.1f}s, "
+      f"played {sic.san(smove)} | {snote}", flush=True)
+assert smove in sic.legal_moves
+
 import time as _t
 mid = chess.Board()
 for m in ["e2e4", "c7c5", "g1f3", "d7d6", "d2d4", "c5d4", "f3d4", "g8f6", "b1c3", "a7a6", "c1e3", "e7e5", "d4b3", "c8e6"]:
