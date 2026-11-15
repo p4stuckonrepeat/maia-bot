@@ -3,12 +3,12 @@
 maia:
   model: maia3-79m     # (model change needs a restart)
   elo: 2800            # rating Maia imitates (trained range 600-2600; above that is extrapolated)
-  temperature: 1.0     # 0 = always most likely move, 1 = full human randomness
+  temperature: 0.7     # 0 = always most likely move, 1 = full human randomness
   top_p: 0.9           # only sample from the most likely moves covering this probability
   oppo_elo: 2600       # opponent rating Maia assumes; "opponent" = real rating (plays sloppier vs weak players)
 
 search:                # light human-like calculation with Maia's own judgement (no Stockfish)
-  enabled: false
+  enabled: true
   candidates: 4        # natural moves considered (Maia's most likely)
   depth: 1             # 1 = check the opponent's likely replies; 2 = also our answer (slower)
   widths: [3, 2]       # replies considered at each level
@@ -19,9 +19,9 @@ search:                # light human-like calculation with Maia's own judgement 
 style:                 # consistent playing style (one "person" across games)
   enabled: true
   name: classical      # classical theory by phase (opening principles, Nimzowitsch, Steinitz, Capablanca/Tarrasch); or: positional
-  strength: 2.0        # 0 = pure Maia, 1 = noticeable, 2+ = very consistent / predictable
+  strength: 1.0        # 0 = pure Maia, 1 = noticeable, 2+ = very consistent / predictable
   candidates: 8        # how many of Maia's most likely moves the style chooses between
-  min_relative_prob: 0.25 # rules may pick moves at least a quarter as likely as Maia's top choice
+  min_relative_prob: 0.5  # rules only choose between moves nearly as likely as Maia's top choice
 
 timing:                # human-like thinking time, based only on the move (not on the clock)
   enabled: true
@@ -56,6 +56,7 @@ guard:                 # Stockfish blunder guard. Maia still chooses every move.
   replace_with: softer_mistake  # softer_mistake = play a smaller mistake instead; maia_next = Maia's next safe move
   softer_drop_cp: 300  # the smaller mistake aims ~3 pawns below the position before...
   softer_target_cp: 0  # ...but at most "equal" (0), so a winning position becomes about equal
+  block_mates: true    # even in bad positions, never walk into a forced mate if it can be avoided
   min_clock_seconds: 15  # skip the check when the bot's clock is lower than this
 
 challenges:

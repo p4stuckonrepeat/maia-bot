@@ -108,7 +108,22 @@ class Guard:
         with self.lock:
             before = self.score(board, color, depth)
             if before < gcfg["playable_cp"]:
-                return move, None  # already bad: let Maia play on naturally
+                # Already worse: let Maia play on naturally, but never walk into a forced mate
+                # while there is still a way to avoid it (keep fighting like a human would).
+                if gcfg.get("block_mates", True) and before > -9000:
+                    after = self.after(board, move, color, depth)
+                    if after <= -9000:
+                        for c in candidates_fn():
+                            m = c["move"]
+                            if m != move:
+                                a = self.after(board, m, color, depth)
+                                if a > -9000:
+                                    return m, (f"vetoed {board.san(move)} (allows forced mate), "
+                                               f"played Maia's {board.san(m)} ({a:+})")
+                        best = self.sf.play(board, chess.engine.Limit(depth=depth)).move
+                        return best, (f"vetoed {board.san(move)} (allows forced mate), "
+                                      f"played Stockfish's {board.san(best)}")
+                return move, None
             after = self.after(board, move, color, depth)
             winning = before >= gcfg.get("winning_cp", 150)
             floor = gcfg.get("winning_floor_cp", -50)

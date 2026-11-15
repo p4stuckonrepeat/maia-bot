@@ -173,6 +173,13 @@ m3, n3 = guard.check(g3, nf5, cfg["guard"], lambda: maia.choose(g3, cfg["maia"],
 print("guard test 3:", g3.san(m3), "|", n3, flush=True)
 assert m3 != nf5 and n3
 
+# Guard test 4: lost position (down a queen), ...Ra2?? allows mate -> must be vetoed even though already lost.
+g4 = chess.Board("r5k1/5ppp/8/8/8/8/5PPP/3QR1K1 b - - 0 1")
+ra2 = chess.Move.from_uci("a8a2")
+m4, n4 = guard.check(g4, ra2, cfg["guard"], lambda: maia.choose(g4, cfg["maia"], 2600, candidates=8)[1])
+print("guard test 4:", g4.san(m4), "|", n4, flush=True)
+assert m4 != ra2 and n4
+
 bot = Bot(settings, api, maia, guard, "me", Book(path="/nonexistent"))
 
 def ch(cid, limit=180, inc=0, variant="standard", rated=True, title=None):
