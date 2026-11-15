@@ -1,0 +1,18 @@
+name: Evaluate position
+on:
+  workflow_dispatch:
+    inputs:
+      moves:
+        description: "Moves in SAN, space separated"
+      check_ply:
+        description: "Index (0-based) of the move to examine"
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y stockfish && pip install chess
+      - env:
+          MOVES: ${{ inputs.moves }}
+          CHECK_PLY: ${{ inputs.check_ply }}
+        run: python -u -m tools.eval_pos
