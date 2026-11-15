@@ -1,0 +1,91 @@
+name: "Style training on Kaggle GPU"
+on:
+  workflow_dispatch:
+    inputs:
+      player:
+        description: "tal | chesscom:<user>:<classes> | lichess:<user>:<speeds>"
+        default: "chesscom:hikaru:blitz,rapid"
+      name:
+        description: "Model name (file <name>-79m.pt, release <name>-model)"
+        default: "hikaru"
+      max_games:
+        description: "Max games (0 = all)"
+        default: "0"
+      epochs:
+        default: "2"
+      minutes:
+        description: "Training time limit on Kaggle (max ~660)"
+        default: "600"
+      train_blocks:
+        description: "How many top blocks to train (2 = gentle, 8 = everything)"
+        default: "2"
+      lr:
+        default: "5e-6"
+permissions:
+  contents: write
+jobs:
+  kaggle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    env:
+      KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+      KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+      KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Kaggle
+        run: |
+          pip install -q kaggle
+          if [ -z "$KAGGLE_USERNAME" ]; then echo "::error::Secret KAGGLE_USERNAME missing"; exit 1; fi
+          [ -z "$KAGGLE_API_TOKEN" ] && unset KAGGLE_API_TOKEN || true
+      - name: Create Kaggle notebook
+        run: |
+          SLUG="maia-style-${{ inputs.name }}"
+          mkdir kernel
+          cat > kernel/run.py <<PY
+          import os, subprocess, shutil
+          def sh(c): print("+", c, flush=True); subprocess.run(c, shell=True, check=True)
+          sh("nvidia-smi || true")
+          sh("pip install -q git+https://github.com/CSSLab/maia3@1e13597c42d4858b7cfd7cfdae01e297263364b2 pyyaml python-chess")
+          sh("git clone --depth 1 https://github.com/${{ github.repository }} repo")
+          os.environ.update({"PLAYER": "${{ inputs.player }}", "PLAYER_MAX_GAMES": "${{ inputs.max_games }}",
+                             "TAL_EPOCHS": "${{ inputs.epochs }}", "TAL_MINUTES": "${{ inputs.minutes }}",
+                             "TAL_TRAIN_BLOCKS": "${{ inputs.train_blocks }}", "TAL_LR": "${{ inputs.lr }}",
+                             "TAL_BATCH": "64", "TAL_EVAL_EVERY": "1500",
+                             "TAL_OUT": "/kaggle/working/${{ inputs.name }}-79m.pt"})
+          os.chdir("repo")
+          sh("python -u -m tal.train")
+          shutil.copy("tal-info.json", "/kaggle/working/${{ inputs.name }}-info.json")
+          PY
+          cat > kernel/kernel-metadata.json <<JSON
+          {"id": "$KAGGLE_USERNAME/$SLUG", "title": "$SLUG", "code_file": "run.py", "language": "python",
+           "kernel_type": "script", "is_private": true, "enable_gpu": true, "enable_internet": true,
+           "machine_shape": "NvidiaTeslaT4"}
+          JSON
+          echo "SLUG=$SLUG" >> "$GITHUB_ENV"
+      - name: Start on Kaggle
+        run: kaggle kernels push -p kernel
+      - name: Wait for Kaggle (up to ~5.5 h here; longer runs can be fetched later)
+        run: |
+          for i in $(seq 1 660); do
+            st=$(kaggle kernels status "$KAGGLE_USERNAME/$SLUG" 2>&1 || true)
+            echo "$(date +%H:%M) $st"
+            case "$st" in *complete*|*COMPLETE*) break;; *error*|*ERROR*|*cancel*|*CANCEL*) kaggle kernels output "$KAGGLE_USERNAME/$SLUG" -p out || true; cat out/*.log 2>/dev/null | tail -60; exit 1;; esac
+            sleep 30
+          done
+      - name: Download result
+        run: |
+          kaggle kernels output "$KAGGLE_USERNAME/$SLUG" -p out
+          ls -la out
+          tail -40 out/*.log 2>/dev/null || true
+          python3 - <<PY >> "$GITHUB_STEP_SUMMARY"
+          import json; i = json.load(open("out/${{ inputs.name }}-info.json"))
+          print(f"## Style training: {i.get('player')}\n- games {i['games']}, trained moves {i['train_moves']}, epochs {i['epochs']:.2f}, {i['positions_per_s']:.0f} positions/s\n- predicts the player's move on held-out games: **{i['before']:.1%} -> {i['after']:.1%}**")
+          PY
+      - name: Save as release (only if better than normal Maia)
+        run: |
+          python3 -c "import json,sys; sys.exit(0 if json.load(open('out/${{ inputs.name }}-info.json'))['improved'] else 1)" || { echo "Not better than normal Maia - not saved"; exit 0; }
+          TAG="${{ inputs.name }}-model"
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "${{ inputs.name }} style model" --notes "Maia-3 79M fine-tuned on ${{ inputs.player }}"
+          gh release upload "$TAG" "out/${{ inputs.name }}-79m.pt" "out/${{ inputs.name }}-info.json" --clobber

@@ -25,16 +25,56 @@ from maia3.dataset import get_historical_tokens, get_legal_moves_mask, tokenize_
 from maia3.uci import Maia3UCIEngine, parse_args
 from maia3.utils import mirror_move
 
+# PLAYER = "tal" (pgnmentor over-the-board games) or "chesscom:<user>:<time classes>",
+# e.g. "chesscom:hikaru:blitz,rapid", or "lichess:<user>:<speeds>".
+PLAYER = os.environ.get("PLAYER", "tal")
+MAX_GAMES = int(os.environ.get("PLAYER_MAX_GAMES", "0"))     # 0 = all
 SOURCES = ["https://www.pgnmentor.com/players/Tal.zip"]
-ELO = 2600                     # the bot plays with elo 2600, so Tal's style is attached to that setting
+ELO = 2600                     # the bot plays with elo 2600, so the style is attached to that setting
 OUT = os.environ.get("TAL_OUT", "tal-79m.pt")
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+UA = {"User-Agent": "maia-bot style training (github.com/p4stuckonrepeat/maia-bot)"}
 
 
 def log(*a):
     print(time.strftime("%H:%M:%S"), *a, flush=True)
 
 
+def download_chesscom(user, classes):
+    archives = requests.get(f"https://api.chess.com/pub/player/{user}/games/archives", headers=UA, timeout=60).json()["archives"]
+    parts = []
+    for url in reversed(archives):          # newest first
+        for _ in range(3):
+            try:
+                data = requests.get(url, headers=UA, timeout=60).json()
+                break
+            except Exception:
+                time.sleep(5)
+        else:
+            continue
+        for g in data.get("games", []):
+            if g.get("rules") == "chess" and g.get("time_class") in classes and g.get("pgn"):
+                parts.append(g["pgn"])
+        if MAX_GAMES and len(parts) >= MAX_GAMES * 1.05:
+            break
+        time.sleep(0.3)
+    log(f"chess.com {user}: {len(parts)} games ({','.join(classes)}) from {len(archives)} months available")
+    return "\n\n".join(parts)
+
+
+def download_lichess(user, speeds):
+    r = requests.get(f"https://lichess.org/api/games/user/{user}", headers={**UA, "Accept": "application/x-chess-pgn"},
+                     params={"perfType": ",".join(speeds), "max": MAX_GAMES or None}, timeout=600)
+    return r.text
+
+
 def download_games():
+    if PLAYER.startswith("chesscom:"):
+        _, user, classes = PLAYER.split(":")
+        return download_chesscom(user, classes.split(","))
+    if PLAYER.startswith("lichess:"):
+        _, user, speeds = PLAYER.split(":")
+        return download_lichess(user, speeds.split(","))
     for url in SOURCES:
         try:
             r = requests.get(url, timeout=120, headers={"User-Agent": "Mozilla/5.0"})
@@ -55,7 +95,11 @@ def tal_games(text):
         if g is None:
             break
         w, b = g.headers.get("White", ""), g.headers.get("Black", "")
-        is_w, is_b = bool(re.match(r"^Tal\b", w)), bool(re.match(r"^Tal\b", b))
+        if ":" in PLAYER:
+            user = PLAYER.split(":")[1].lower()
+            is_w, is_b = w.lower() == user, b.lower() == user
+        else:
+            is_w, is_b = bool(re.match(r"^Tal\b", w)), bool(re.match(r"^Tal\b", b))
         if is_w == is_b or g.headers.get("Variant") or g.headers.get("SetUp") == "1":
             continue
         moves = list(g.mainline_moves())
@@ -64,6 +108,8 @@ def tal_games(text):
         res = g.headers.get("Result", "*")
         games.append({"moves": [m.uci() for m in moves], "tal": chess.WHITE if is_w else chess.BLACK,
                       "result": res})
+        if MAX_GAMES and len(games) >= MAX_GAMES:
+            break
     return games
 
 
@@ -101,17 +147,18 @@ class Encoder:
     def batch(self, games, items):
         rows = [self.encode(games[gi], ply) for gi, ply in items]
         rows = [r for r in rows if r[2] is not None]
-        t = torch.stack([r[0] for r in rows])
-        m = torch.stack([r[1] for r in rows])
-        y = torch.tensor([r[2] for r in rows])
-        v = torch.tensor([r[3] for r in rows])
+        t = torch.stack([r[0] for r in rows]).to(DEVICE)
+        m = torch.stack([r[1] for r in rows]).to(DEVICE)
+        y = torch.tensor([r[2] for r in rows]).to(DEVICE)
+        v = torch.tensor([r[3] for r in rows]).to(DEVICE)
         return t, m, y, v
 
 
 def forward(model, t, m):
-    elos = torch.full((t.size(0),), ELO, dtype=torch.float)
-    logits_move, logits_value, _ = model(t, elos, elos)
-    return logits_move.masked_fill(~m, float("-inf")), logits_value
+    elos = torch.full((t.size(0),), ELO, dtype=torch.float, device=t.device)
+    with torch.autocast("cuda", dtype=torch.float16, enabled=DEVICE == "cuda"):
+        logits_move, logits_value, _ = model(t, elos, elos)
+    return logits_move.float().masked_fill(~m, float("-inf")), logits_value.float()
 
 
 @torch.no_grad()
@@ -145,14 +192,14 @@ def main():
     s_train, s_hold = samples(train), samples(hold)
     rng.shuffle(s_hold)
     s_hold = s_hold[:eval_n]
-    log(f"Tal games: {len(games)} (train {len(train)}, held out {len(hold)}); "
-        f"Tal moves: train {len(s_train)}, eval {len(s_hold)}")
+    log(f"{PLAYER} games: {len(games)} (train {len(train)}, held out {len(hold)}); "
+        f"player moves: train {len(s_train)}, eval {len(s_hold)}; device {DEVICE}")
 
-    eng = Maia3UCIEngine(parse_args(["--model", "maia3-79m"]))
+    eng = Maia3UCIEngine(parse_args(["--model", "maia3-79m", "--device", DEVICE]))
     eng.ensure_model_loaded()
     model = eng.model
     if os.environ.get("TAL_RESUME") and os.path.exists(os.environ["TAL_RESUME"]):
-        ck = torch.load(os.environ["TAL_RESUME"], map_location="cpu")
+        ck = torch.load(os.environ["TAL_RESUME"], map_location=DEVICE)
         model.load_state_dict(ck["model_state_dict"])
         log("resumed from", os.environ["TAL_RESUME"], ck.get("info"))
     enc = Encoder(eng)
@@ -172,9 +219,10 @@ def main():
     log(f"training the last {train_blocks} of {n_blocks} blocks + heads: {trainable / 1e6:.1f}M parameters")
     quick = s_hold[:800]
     best_acc = accuracy(model, enc, hold, quick)
-    best_state = {k: v.detach().clone() for k, v in model.state_dict().items()}
+    best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
     log(f"quick eval (800 positions) at start: {best_acc:.1%}")
     opt = torch.optim.AdamW([p for p in model.parameters() if p.requires_grad], lr=lr, weight_decay=0.01)
+    scaler = torch.amp.GradScaler("cuda", enabled=DEVICE == "cuda")
     total_steps = int(len(s_train) * epochs / bs)
     deadline, step, seen, t_start = time.time() + minutes * 60, 0, 0, time.time()
     model.train()
@@ -190,9 +238,11 @@ def main():
             if keep.any():
                 loss = loss + value_w * F.cross_entropy(lv[keep], v[keep])
             opt.zero_grad()
-            loss.backward()
+            scaler.scale(loss).backward()
+            scaler.unscale_(opt)
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            opt.step()
+            scaler.step(opt)
+            scaler.update()
             step += 1
             seen += len(y)
             if step % 50 == 0:
@@ -203,25 +253,26 @@ def main():
                 acc = accuracy(model, enc, hold, quick)
                 model.train()
                 if acc > best_acc:
-                    best_acc, best_state = acc, {k: v.detach().clone() for k, v in model.state_dict().items()}
+                    best_acc, best_state = acc, {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
                 log(f"quick eval at step {step}: {acc:.1%} (best {best_acc:.1%})")
     rate = seen / max(1, time.time() - t_start)
     acc = accuracy(model, enc, hold, quick)
     if acc > best_acc:
-        best_acc, best_state = acc, {k: v.detach().clone() for k, v in model.state_dict().items()}
+        best_acc, best_state = acc, {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
     model.load_state_dict(best_state)   # keep the best version seen during training
     after = accuracy(model, enc, hold, s_hold)
     info = {"before": base, "after": after, "positions_trained": seen, "epochs": seen / len(s_train),
             "positions_per_s": rate, "train_moves": len(s_train), "games": len(games)}
     log(f"held-out Tal move match AFTER training: {after:.1%} (before {base:.1%})")
     info["improved"] = after > base
-    torch.save({"model_state_dict": model.state_dict(), "info": info}, OUT)
+    info["player"] = PLAYER
+    torch.save({"model_state_dict": {k: v.cpu() for k, v in model.state_dict().items()}, "info": info}, OUT)
     json.dump(info, open("tal-info.json", "w"), indent=1)
     hours_epoch = len(s_train) / rate / 3600
-    text = (f"## Tal training\n- games: {len(games)}, Tal moves for training: {len(s_train)}\n"
+    text = (f"## Style training: {PLAYER}\n- games: {len(games)}, player moves for training: {len(s_train)}\n"
             f"- trained on {seen} positions ({seen / len(s_train):.2f} epochs) at {rate:.1f} positions/s "
             f"(one epoch ≈ {hours_epoch:.1f} h on this machine)\n"
-            f"- predicts Tal's move on held-out games: **{base:.1%} → {after:.1%}**\n")
+            f"- predicts the player's move on held-out games: **{base:.1%} → {after:.1%}**\n")
     print(text)
     if os.environ.get("GITHUB_STEP_SUMMARY"):
         open(os.environ["GITHUB_STEP_SUMMARY"], "a").write(text)
