@@ -8,7 +8,8 @@ import yaml
 
 
 class Settings:
-    def __init__(self, path="config.yml", poll_seconds=30):
+    def __init__(self, path=None, poll_seconds=30):
+        path = path or os.environ.get("BOT_CONFIG", "config.yml")
         self.path, self.poll = path, poll_seconds
         self.cfg = yaml.safe_load(open(path))
         self.repo = os.environ.get("GITHUB_REPOSITORY")

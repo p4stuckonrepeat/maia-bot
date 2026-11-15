@@ -10,6 +10,11 @@ on:
       hours:
         description: "Session length in hours (max 5.5)"
         default: "5"
+      profile:
+        description: "normal = Maia + book + rules, tal = play like Mikhail Tal"
+        type: choice
+        options: [normal, tal]
+        default: normal
 concurrency:
   group: lichess-bot-${{ inputs.mode }}
   cancel-in-progress: false
@@ -34,6 +39,11 @@ jobs:
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements.txt git+https://github.com/CSSLab/maia3@1e13597c42d4858b7cfd7cfdae01e297263364b2
           maia3-cache --model maia3-79m
+      - name: Get Tal model
+        if: ${{ inputs.profile == 'tal' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download tal-model -p tal-79m.pt
       - name: Self-test (offline)
         timeout-minutes: 5
         run: python -u -m tests.selftest
@@ -41,6 +51,7 @@ jobs:
         env:
           LICHESS_TOKEN: ${{ secrets.LICHESS_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
+          BOT_CONFIG: ${{ inputs.profile == 'tal' && 'config-tal.yml' || 'config.yml' }}
         run: |
           if [ -z "$LICHESS_TOKEN" ]; then echo "::error::Secret LICHESS_TOKEN is missing"; exit 1; fi
           if [ "${{ inputs.mode }}" = "check" ]; then

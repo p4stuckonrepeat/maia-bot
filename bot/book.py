@@ -15,7 +15,14 @@ class Book:
     def __init__(self, path="book.json"):
         self.openings = {}
         if os.path.exists(path):
-            self.openings = json.load(open(path)).get("openings", {})
+            data = json.load(open(path))
+            if "openings" in data:
+                self.openings = data["openings"]
+            elif "white" in data and "black" in data:   # a player's own book: {side: {fen: {uci: count}}}
+                for side in ("white", "black"):
+                    self.openings[f"player_{side}"] = {
+                        "color": side,
+                        "positions": {k: [[m, c] for m, c in v.items()] for k, v in data[side].items()}}
         self.games = {}  # game id -> {"opening": name or None, "out": bool}
 
     def loaded(self):
@@ -32,8 +39,10 @@ class Book:
         side = "white" if color == chess.WHITE else "black"
         weights = {n: s.get("weight", 0) for n, s in ocfg.get(side, {}).items()}
         k = key(board)
+        for n in self.openings:
+            weights.setdefault(n, 100)   # e.g. a player's own book, not listed in config
         fits = [n for n, o in self.openings.items()
-                if o["color"] == side and n in weights and k in o["positions"]]
+                if o["color"] == side and k in o["positions"]]
         if not fits:
             st["out"] = True
             return None, None

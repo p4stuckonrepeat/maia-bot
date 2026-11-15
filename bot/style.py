@@ -235,3 +235,24 @@ def classical_score(board, move, exp=None):
 
 
 STYLES["classical"] = classical_score
+
+
+# ---------------------------------------------------------------------------------------------
+# "tal_learned": Tal-style features with weights fitted on Tal's own games (tal/tal-rules.json).
+# ---------------------------------------------------------------------------------------------
+_TAL = {}
+
+
+def tal_learned_logit(board, cand):
+    import json
+    import os
+    if not _TAL:
+        path = os.path.join(os.path.dirname(__file__), "..", "tal", "tal-rules.json")
+        _TAL.update(json.load(open(path)))
+    from tal.imitate import features
+    w, d, _ = cand.get("wdl", (0, 1000, 0))
+    f = features(board, cand["move"], cand["policy"], (w + 0.5 * d) / 1000)
+    return sum(_TAL["weights"][n] * v for n, v in zip(_TAL["features"], f))
+
+
+STYLES["tal_learned"] = lambda board, move, exp=None: 0.0   # handled in Maia.choose_styled

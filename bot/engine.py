@@ -14,9 +14,12 @@ from bot.style import STYLES
 class Maia:
     """Runs the official Maia-3 inference code inside this process."""
 
-    def __init__(self, model):
+    def __init__(self, model, checkpoint=None):
         self.lock = threading.Lock()
-        self.eng = Maia3UCIEngine(parse_args(["--model", model, "--use-uci-history", "--multipv", "1"]))
+        args = ["--model", model, "--use-uci-history", "--multipv", "1"]
+        if checkpoint:
+            args += ["--checkpoint", checkpoint]       # e.g. the Tal fine-tuned weights
+        self.eng = Maia3UCIEngine(parse_args(args))
         self.eng.ensure_model_loaded()
 
     def choose(self, board, maia_cfg, opp_rating=None, candidates=1):
@@ -44,6 +47,13 @@ class Maia:
         if not top:
             return None, top, secs
         score_fn = STYLES[style_cfg.get("name", "positional")]
+        if style_cfg.get("name") == "tal_learned":   # weights fitted on Tal's games decide everything
+            from bot.style import tal_learned_logit
+            logits = [tal_learned_logit(board, c) for c in top]
+            temp = max(0.05, float(maia_cfg["temperature"]))
+            mx = max(logits)
+            weights = [math.exp((l - mx) / temp) for l in logits]
+            return random.choices([c["move"] for c in top], weights=weights)[0], top, secs
         strength = float(style_cfg.get("strength", 1.0))
         temp = max(0.05, float(maia_cfg["temperature"]))
         total = sum(c["policy"] for c in top)

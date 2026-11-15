@@ -251,7 +251,7 @@ def main():
         if not ok:
             raise SystemExit(1)
 
-    maia = Maia(cfg["maia"]["model"])
+    maia = Maia(cfg["maia"]["model"], cfg["maia"].get("checkpoint"))
     guard = Guard()
     try:
         run(settings, api, maia, guard, acc, me, args)
@@ -272,7 +272,8 @@ def run(settings, api, maia, guard, acc, me, args):
     log(f"Blunder guard: {'ON' if cfg.get('guard', {}).get('enabled') else 'OFF'}")
     st = cfg.get("style", {})
     log(f"Style: {st.get('name', 'positional') + ' ' + str(st.get('strength')) if st.get('enabled') else 'OFF'}")
-    book = Book()
+    book = Book(cfg.get("openings", {}).get("book", {}).get("path", "book.json"))
+    log(f"Profile: {settings.path} | model: {cfg['maia'].get('checkpoint') or cfg['maia']['model']}")
     log(f"Opening book: {book.loaded()} positions in {len(book.openings)} openings")
     bot = Bot(settings, api, maia, guard, me, book)
     settings.start(log)
