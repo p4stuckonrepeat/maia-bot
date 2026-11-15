@@ -88,6 +88,7 @@ for i in range(50):
     assert bk.pick(f"d{i}", after_d4, chess.BLACK, bcfg)[0].uci() == "g8f6"
 bcfg["openings"]["black"]["kings_indian"]["weight"] = 0
 bcfg["openings"]["black"].pop("french")
+bk.openings.pop("french")
 assert bk.pick("x", after_d4, chess.BLACK, bcfg)[0].uci() == "g8f6"   # fallback when nothing else fits
 after_c4 = chess.Board(); after_c4.push_uci("c2c4")
 assert bk.pick("y", after_c4, chess.BLACK, bcfg) == (None, None)       # out of book -> Maia
