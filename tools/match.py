@@ -42,13 +42,15 @@ def play(bot, opponent, opp_name, bot_white, gid):
 def main():
     settings = Settings()
     cfg = settings.cfg
-    maia, guard = Maia(cfg["maia"]["model"]), Guard()
-    bot = Bot(settings, None, maia, guard, "maia-bot", Book())
+    maia, guard = Maia(cfg["maia"]["model"], cfg["maia"].get("checkpoint")), Guard()
+    bot = Bot(settings, None, maia, guard, "maia-bot",
+              Book(cfg.get("openings", {}).get("book", {}).get("path", "book.json")))
+    plain = Maia(cfg["maia"]["model"]) if cfg["maia"].get("checkpoint") else maia
     plain_cfg = {"elo": 2600, "temperature": 1.0, "top_p": 1.0}
     sf = chess.engine.SimpleEngine.popen_uci("/usr/games/stockfish")
     sf.configure({"UCI_LimitStrength": True, "UCI_Elo": SF_ELO, "Threads": 1})
     opponents = [
-        ("Maia-3 2600 (plain)", lambda b: maia.choose(b, plain_cfg, 2600)[0]),
+        ("Maia-3 2600 (plain)", lambda b: plain.choose(b, plain_cfg, 2600)[0]),
         (f"Stockfish (UCI_Elo {SF_ELO})", lambda b: sf.play(b, chess.engine.Limit(time=0.1)).move),
     ]
     pgns, score = [], {}
