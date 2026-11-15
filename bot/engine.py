@@ -126,6 +126,11 @@ class Guard:
     def sacrifice(self, board, move, pv, min_material=2):
         """True if `move` gives up material (2+ pawns' worth) that is not won straight back in the main line."""
         color = board.turn
+        piece = board.piece_at(move.from_square)
+        if piece is None or piece.piece_type in (chess.KING, chess.PAWN):
+            return False                     # a real sacrifice offers a piece
+        if not pv or pv[0].to_square != move.to_square:
+            return False                     # the opponent's best reply must take the offered piece
         start = self.material(board, color)
         b = board.copy(stack=False)
         line = [move] + pv
@@ -260,6 +265,9 @@ class Guard:
         if not cands:
             return move, None
         with self.lock:
+            now = self.score(board, color, depth)
+            if now > float(bcfg.get("max_eval_cp", 300)) or now < float(bcfg.get("min_now_cp", -200)):
+                return move, None    # already winning (no need to show off) or already lost
             sacs = []
             for c in cands:
                 sc, pv = self.after_pv(board, c["move"], color, depth)
