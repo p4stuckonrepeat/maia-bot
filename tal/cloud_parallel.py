@@ -18,9 +18,9 @@ REPO = os.environ["REPO"]
 GH = {"Authorization": f"Bearer {os.environ['GH_TOKEN']}", "Accept": "application/vnd.github+json"}
 TAG = "tal-runs"
 VARIANTS = {   # blocks, lr, epochs, minutes
-    "pre_b8_lr5e-6": ("8", "5e-6", "5", "25"),
-    "pre_b4_lr1e-5": ("4", "1e-5", "6", "20"),
-    "pre_all_lr3e-6": ("99", "3e-6", "4", "25"),
+    "pre_b8_lr5e-6": ("8", "5e-6", "5", "20"),
+    "pre_b4_lr1e-5": ("4", "1e-5", "6", "16"),
+    "pre_all_lr3e-6": ("99", "3e-6", "4", "20"),
 }
 
 
