@@ -15,6 +15,14 @@ lines.append(f"Playing now: {len(playing)}")
 for g in playing:
     o = g.get("opponent", {})
     lines.append(f"- vs {o.get('username')} ({o.get('rating')}) https://lichess.org/{g.get('gameId')}")
+ch = requests.get("https://lichess.org/api/challenge", headers=h, timeout=20).json()
+for c in ch.get("out", []):
+    lines.append(f"Outgoing challenge: {c.get('destUser', {}).get('name')} {c.get('timeControl', {}).get('show')} "
+                 f"{'rated' if c.get('rated') else 'casual'} status {c.get('status')}")
+bots = [__import__('json').loads(l) for l in requests.get("https://lichess.org/api/bot/online", headers=h,
+        params={"nb": 100}, timeout=20).text.splitlines() if l.strip()]
+inr = [b for b in bots if 1900 <= ((b.get("perfs", {}).get("blitz") or {}).get("rating") or 0) <= 2700]
+lines.append(f"Online bots: {len(bots)}, with blitz 1900-2700: {len(inr)}")
 r = requests.get(f"https://lichess.org/api/games/user/{me}", headers={**h, "Accept": "application/x-chess-pgn"},
                  params={"max": 8}, timeout=60)
 pgn = io.StringIO(r.text)
