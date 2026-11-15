@@ -78,7 +78,7 @@ brilliant:             # Tal mode: always go for sacrifices that keep the positi
   depth: 12
   speculative: true    # also Tal's speculative sacrifices: objectively a bit worse, but they create an attack
   spec_min_eval_cp: -150   # may cost up to 1.5 pawns by Stockfish's count (never more)
-  spec_chance: 0.7     # how often it goes for one when available
+  spec_chance: 0.3     # how often it goes for one when available
   max_eval_cp: 300     # only look for sacrifices while the game is still open (not when already +3)
   min_now_cp: -200
 
@@ -128,3 +128,15 @@ openings:
   book:
     enabled: true
     path: book-tal-rep.json   # attacking repertoire built from 2400+ games (Tal's own book: book-tal.json)
+
+matchmaking:           # when idle, challenge other Lichess bots (to measure the real rating)
+  enabled: true
+  rated: true
+  speed: blitz
+  limit: 180           # 3+2
+  increment: 2
+  min_rating: 1900
+  max_rating: 2700
+  idle_seconds: 60
+  exclude: []
+
