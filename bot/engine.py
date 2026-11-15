@@ -236,13 +236,17 @@ class Guard:
         """Sacrifice hunter on its own (Tal mode): if a natural candidate sacrifices material and the
         position after it is still at least `min_eval_cp` (about equal), play it. Return (move, note or None)."""
         color, depth = board.turn, int(bcfg.get("depth", 12))
+        board.push(move)
+        mate_now = board.is_checkmate()
+        board.pop()
+        if mate_now:
+            return move, None          # never trade a direct mate for a show sacrifice
         cands = [c for c in top if c["policy"] >= float(bcfg.get("min_prob", 0.02))]
         if not cands:
             return move, None
         with self.lock:
             sacs = []
             for c in cands:
-                # cheap pre-check: only moves that leave material hanging or capture with a bigger piece
                 sc, pv = self.after_pv(board, c["move"], color, depth)
                 if sc >= float(bcfg.get("min_eval_cp", -30)) and self.sacrifice(board, c["move"], pv):
                     sacs.append((c, sc))
