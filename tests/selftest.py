@@ -149,6 +149,16 @@ t0 = _t.time(); mv, root, note = sr.choose(mid, cfg["maia"], cfg["search"], 2600
 print(f"search move in Najdorf: {mid.san(mv) if mv else 'skipped'} in {_t.time() - t0:.2f}s; "
       + ", ".join(f"{mid.san(c['move'])} p={c['policy']:.2f} v={c.get('value', 0):.2f}" for c in root), flush=True)
 
+# Guard test 3 (real game): White is winning (+4.5) and 23.Nf5?? throws it away (-2.9) -> must be vetoed.
+g3 = chess.Board()
+for m in ("e4 c6 d4 d5 Nc3 dxe4 Nxe4 Nf6 Nxf6+ exf6 c3 Bd6 Bd3 O-O Qc2 Re8+ Ne2 h5 O-O Nd7 Ng3 h4 "
+          "Nf5 Nf8 Nxh4 Qc7 h3 Bd7 Nf5 Re6 Qd1 Rae8 Bd2 Ng6 Qf3 Bf4 Be3 Bxe3 fxe3 Nh4 Nxh4 Rxe3 Qd1 Qg3").split():
+    g3.push_san(m)
+nf5 = g3.parse_san("Nf5")
+m3, n3 = guard.check(g3, nf5, cfg["guard"], lambda: maia.choose(g3, cfg["maia"], 2600, candidates=8)[1])
+print("guard test 3:", g3.san(m3), "|", n3, flush=True)
+assert m3 != nf5 and n3
+
 bot = Bot(settings, api, maia, guard, "me", Book(path="/nonexistent"))
 
 def ch(cid, limit=180, inc=0, variant="standard", rated=True, title=None):

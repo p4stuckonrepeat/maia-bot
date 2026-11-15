@@ -94,7 +94,11 @@ class Guard:
             if before < gcfg["playable_cp"]:
                 return move, None  # already bad: let Maia play on naturally
             after = self.after(board, move, color, depth)
-            if after > gcfg["lost_cp"] or before - after < gcfg["min_drop_cp"]:
+            winning = before >= gcfg.get("winning_cp", 150)
+            floor = gcfg.get("winning_floor_cp", -50)
+            throws_win = winning and after < floor
+            collapses = after <= gcfg["lost_cp"] and before - after >= gcfg["min_drop_cp"]
+            if not (throws_win or collapses):
                 return move, None
             # Blunder: replace it with one of Maia's own alternatives.
             cands = [c["move"] for c in candidates_fn() if c["move"] != move]
@@ -103,9 +107,9 @@ class Guard:
                 # (e.g. winning -> roughly equal), not for the best move.
                 target = min(before - float(gcfg.get("softer_drop_cp", 300)),
                              float(gcfg.get("softer_target_cp", 0)))
-                target = max(target, gcfg["lost_cp"] + 150)
+                target = max(target, gcfg["lost_cp"] + 150, floor if winning else -10000)
                 scored = [(m, self.after(board, m, color, depth)) for m in cands]
-                ok = [(m, a) for m, a in scored if a > gcfg["lost_cp"]]
+                ok = [(m, a) for m, a in scored if a > gcfg["lost_cp"] and (not winning or a >= floor)]
                 if ok:
                     m, a = min(ok, key=lambda x: abs(x[1] - target))
                     return m, (f"vetoed {board.san(move)} ({before:+}->{after:+}), played a smaller "
@@ -113,7 +117,7 @@ class Guard:
             else:
                 for m in cands:
                     a = self.after(board, m, color, depth)
-                    if a > gcfg["lost_cp"]:
+                    if a > gcfg["lost_cp"] and (not winning or a >= floor):
                         return m, (f"vetoed {board.san(move)} ({before:+}->{after:+}), "
                                    f"played Maia's {board.san(m)} ({a:+})")
             best = self.sf.play(board, chess.engine.Limit(depth=depth)).move
