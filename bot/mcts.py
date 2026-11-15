@@ -170,7 +170,11 @@ class MCTS:
         min_prior = float(cfg.get("min_prior", 0.04))
         allowed = [ch for i, ch in enumerate(kids) if i < 3 or raw.get(ch.move, 0) >= min_prior or ch.move == natural]
         q = lambda ch: ch.w / ch.n if ch.n else 0.0
-        seen = [ch for ch in allowed if ch.n >= int(cfg.get("min_visits", 3))] or [ch for ch in allowed if ch.n] or allowed
+        mv = int(cfg.get("min_visits", 3))
+        seen = [ch for ch in allowed if ch.n >= mv and ch is not nat_child]
+        if not seen:   # alternatives barely looked at: use whatever was visited
+            seen = [ch for ch in allowed if ch.n and ch is not nat_child]
+        seen = seen + [nat_child] if nat_child in allowed and nat_child.n else (seen or allowed)
         best = max(seen, key=q)
         nat = next((ch for ch in allowed if ch.move == natural), None)
         margin = float(cfg.get("margin", 0.05))
