@@ -249,8 +249,14 @@ def tal_learned_logit(board, cand, rules_file="tal/tal-rules.json"):
     if _TAL.get("_file") != rules_file:
         _TAL.clear()
         path = os.path.join(os.path.dirname(__file__), "..", rules_file)
-        _TAL.update(json.load(open(path)))
+        if os.path.exists(path):
+            _TAL.update(json.load(open(path)))
+        else:                                   # rules not learned yet: just follow the model
+            _TAL.update({"features": ["logp"], "weights": {"logp": 1.0}})
         _TAL["_file"] = rules_file
+    if _TAL["features"] == ["logp"]:
+        import math
+        return math.log(cand["policy"] + 1e-6)
     from tal.imitate import features
     w, d, _ = cand.get("wdl", (0, 1000, 0))
     f = features(board, cand["move"], cand["policy"], (w + 0.5 * d) / 1000)
