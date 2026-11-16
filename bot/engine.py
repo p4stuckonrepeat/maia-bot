@@ -278,7 +278,14 @@ class Guard:
                 extra_features(board, c["move"], cp, best, pv)
             f = dict(zip(FEATURES, vals))
             sfw = float(rcfg.get("stockfish_weight", 1.0))   # <1 = Stockfish counts less -> more human errors
-            logit = sum(w[n] * f[n] * (sfw if n == "sf_loss" else 1.0) for n in names)
+            sfw_here = sfw
+            cw = rcfg.get("complicate_when_worse", {})
+            worse = cw.get("enabled") and best < float(cw.get("below_cp", -80))
+            if worse:   # Tal's practical chances: when worse, prefer messy, forcing positions, keep pieces on
+                sfw_here = sfw * float(cw.get("stockfish_factor", 0.6))
+            logit = sum(w[n] * f[n] * (sfw_here if n == "sf_loss" else 1.0) for n in names)
+            if worse and best - cp <= float(cw.get("max_extra_loss_cp", 150)):
+                logit += sum(float(v) * f.get(n, 0.0) for n, v in cw.get("bonus", {}).items())
             if pat:   # Tal's move patterns (piece to square, captures, checks per phase), learned from his games
                 logit += sum(pat.get(k, 0.0) for k in pattern_keys(board, c["move"], ph))
             scored.append((c["move"], logit, cp))

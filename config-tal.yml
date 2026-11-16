@@ -83,6 +83,18 @@ tal_rules2:            # rules fitted on 46,000 Tal positions: Tal model + Stock
   stockfish_weight: 0.5  # how much Stockfish's verdict counts (1 = Tal's real precision, 0.5 = room for human errors)
   lapse_chance: 0.1    # 10% of moves: no rules, pure Maia instinct (moments of inattention)
   min_clock_seconds: 60  # under 1 minute left: plays on instinct only (more time-pressure mistakes)
+  complicate_when_worse:   # Tal's practical chances: when worse, make it messy instead of defending passively
+    enabled: true
+    below_cp: -80        # "worse" = Stockfish -0.8 or less
+    stockfish_factor: 0.6  # Stockfish's verdict counts less then (accepts slightly weaker but trickier moves)
+    max_extra_loss_cp: 150 # but the bonus only goes to moves at most 1.5 pawns below the best natural move
+    bonus:
+      complexity: 0.6    # positions with many captures / tension
+      threat: 0.4        # moves that create threats
+      forcing: 0.3       # checks, captures, threats
+      sacrifice: 0.3
+      even_trade: -0.6   # avoid simple trades when worse
+      queen_trade: -1.0  # keep the queens on
 
 brilliant:             # Tal mode: always go for sacrifices that keep the position at least equal
   enabled: true
