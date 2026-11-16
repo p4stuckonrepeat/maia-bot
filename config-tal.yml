@@ -78,11 +78,11 @@ tal_rules2:            # rules fitted on 46,000 Tal positions: Tal model + Stock
   enabled: true        # (Tal was much more accurate than the model: 17 vs 29 cp average loss)
   file: tal/tal-rules2.json
   candidates: 10       # only Maia's 10 most natural moves are considered (stays human)
-  temperature: 0.4     # sampling between Tal-scored moves (lower = closer to Tal)
+  temperature: 0.5     # sampling between Tal-scored moves (lower = closer to Tal)
   tal_traits_boost: 1.5  # Tal traits (attack, no trades, complications, sacrifices) count 1.5x
   depth: 12
   stockfish_weight: 0.08  # Stockfish barely counts: fewer engine top moves, Tal style decides (rapid)
-  lapse_chance: 0.12   # base: 12% of moves are pure Maia instinct (moments of inattention)
+  lapse_chance: 0.15   # base: 15% of moves without Stockfish's precision (moments of inattention)
   human_curve:         # measured on 250 games of 2300-2600 players (Lichess Elite Database)
     enabled: true
     start_move: 20     # from move 20 on, instinct moves get more frequent (humans tire / positions get harder)
@@ -115,8 +115,8 @@ brilliant:             # Tal mode: always go for sacrifices that keep the positi
   enabled: true
   chance: 1.0          # Tal show: always (real Tal took 43% of available sound sacrifices)
   min_eval_cp: -60     # sacrifice whenever the position stays about equal (-0.6 or better): always played
-  min_prob: 0.008      # brilliant hunting: also less obvious moves (Maia gives 0.8%+), still human-findable
-  candidates: 16       # look at Maia's 16 most natural moves for sacrifices
+  min_prob: 0.006      # brilliant hunting: also less obvious moves (Maia gives 0.6%+), still human-findable
+  candidates: 20       # look at Maia's 20 most natural moves for sacrifices
   count_offers: true   # also pieces left en prise (chess.com counts those as brilliant too)
   prefer_within_cp: 50 # prefer sacrifices within 0.5 pawns of the best move (that's what chess.com marks brilliant)
   depth: 12
@@ -125,7 +125,7 @@ brilliant:             # Tal mode: always go for sacrifices that keep the positi
   spec_chance: 1.0     # Tal takes over: always go for a speculative sacrifice when one is there
   max_cost_cp: 200     # a sacrifice may cost at most 2 pawns compared with the best natural move (never throw a win away)
   sound_max_cost_cp: 150 # "about equal" sacrifices count as sound only if they cost at most 1.5 pawns vs the best move
-  spec_free_cost_cp: 100 # speculative sacrifices costing at most 1 pawn are allowed even without a direct king attack
+  spec_free_cost_cp: 120 # speculative sacrifices costing at most 1.2 pawns are allowed even without a direct king attack
   tal_motifs: true     # speculative sacrifices also allowed when they are a favourite motif
   motifs_file: tal/brilliant-motifs.json  # Tal + 21 attacking players (Morphy, Keres, Nezhmetdinov, Spielmann, ...)
   max_eval_cp: 600     # Tal also sacrificed when clearly better (median +1.0 before his sacrifices)
