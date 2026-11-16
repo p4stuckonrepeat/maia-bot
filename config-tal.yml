@@ -78,9 +78,11 @@ tal_rules2:            # rules fitted on 46,000 Tal positions: Tal model + Stock
   enabled: true        # (Tal was much more accurate than the model: 17 vs 29 cp average loss)
   file: tal/tal-rules2.json
   candidates: 10       # only Maia's 10 most natural moves are considered (stays human)
-  temperature: 0.75    # sampling, not always the top-scored move
+  temperature: 1.0     # sampling, not always the top-scored move (higher = more human variety)
   depth: 12
-  min_clock_seconds: 40
+  stockfish_weight: 0.5  # how much Stockfish's verdict counts (1 = Tal's real precision, 0.5 = room for human errors)
+  lapse_chance: 0.1    # 10% of moves: no rules, pure Maia instinct (moments of inattention)
+  min_clock_seconds: 60  # under 1 minute left: plays on instinct only (more time-pressure mistakes)
 
 brilliant:             # Tal mode: always go for sacrifices that keep the position at least equal
   enabled: true

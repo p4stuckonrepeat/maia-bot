@@ -265,7 +265,8 @@ class Guard:
             vals = base_features(board, c["move"], c["policy"], (wdl[0] + 0.5 * wdl[1]) / 1000) + \
                 extra_features(board, c["move"], cp, best, pv)
             f = dict(zip(FEATURES, vals))
-            scored.append((c["move"], sum(w[n] * f[n] for n in names), cp))
+            sfw = float(rcfg.get("stockfish_weight", 1.0))   # <1 = Stockfish counts less -> more human errors
+            scored.append((c["move"], sum(w[n] * f[n] * (sfw if n == "sf_loss" else 1.0) for n in names), cp))
         t = float(rcfg.get("temperature", 0.75))
         mx = max(l for _, l, _ in scored)
         ps = [_math.exp((l - mx) / t) for _, l, _ in scored]
