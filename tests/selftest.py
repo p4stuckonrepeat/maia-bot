@@ -177,6 +177,15 @@ wsq, wact = _worst_piece(tp, tp.turn)
 plans = sorted(((round(tal_plan_score(tp, m), 2), tp.san(m)) for m in tp.legal_moves), reverse=True)[:10]
 print("plan test: worst piece", tp.piece_at(wsq).symbol(), chess.square_name(wsq), wact, "| best by plan:", plans, flush=True)
 
+# Fitted Tal rules (study of 46,000 positions): scores Maia's natural moves with Stockfish's verdict.
+import os as _os
+if _os.path.exists("tal/tal-rules2.json"):
+    rcands = maia.choose(fl, cfg["maia"], candidates=10)[1]
+    rmove, rscored = guard.tal_rules(fl, rcands, {"file": "tal/tal-rules2.json", "depth": 10})
+    assert rmove in fl.legal_moves
+    print("tal rules test:", fl.san(rmove), "| top scored:",
+          [(fl.san(m), round(l, 2), cp) for m, l, cp in sorted(rscored, key=lambda x: -x[1])[:4]], flush=True)
+
 # Calculation (Leela-style, Maia only): the natural-looking 3...Nf6?? must be changed (Qxf7#).
 from bot.mcts import MCTS
 mc = MCTS(maia)

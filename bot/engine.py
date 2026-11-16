@@ -244,6 +244,34 @@ class Guard:
         return pick, (f"assist: {board.san(move)} ({scores[move]:+}) -> Maia's "
                       f"{board.san(pick)} ({scores[pick]:+})")
 
+    def tal_rules(self, board, cands, rcfg):
+        """Rules fitted on 46,000 positions from Tal's games (tal/study.py): Tal model + Tal traits +
+        Stockfish's verdict on each natural candidate. Samples a move. Returns (move, scored list)."""
+        import json as _json
+        import math as _math
+        from tal.study import FEATURES, extra_features
+        from tal.imitate import features as base_features
+        if not hasattr(self, "_rules2"):
+            self._rules2 = _json.load(open(rcfg.get("file", "tal/tal-rules2.json")))
+        r = self._rules2
+        names, w = r["features"], r["weights"]
+        color, depth = board.turn, int(rcfg.get("depth", 12))
+        with self.lock:
+            res = [self.after_pv(board, c["move"], color, depth) for c in cands]
+        best = max(cp for cp, _ in res)
+        scored = []
+        for c, (cp, pv) in zip(cands, res):
+            wdl = c.get("wdl", (500, 0, 500))
+            vals = base_features(board, c["move"], c["policy"], (wdl[0] + 0.5 * wdl[1]) / 1000) + \
+                extra_features(board, c["move"], cp, best, pv)
+            f = dict(zip(FEATURES, vals))
+            scored.append((c["move"], sum(w[n] * f[n] for n in names), cp))
+        t = float(rcfg.get("temperature", 0.75))
+        mx = max(l for _, l, _ in scored)
+        ps = [_math.exp((l - mx) / t) for _, l, _ in scored]
+        pick = random.choices(scored, weights=ps)[0]
+        return pick[0], scored
+
     @staticmethod
     def attacking(board, move):
         """Tal's kind of sacrifice: it gives check, or our pieces bear down on the enemy king afterwards."""

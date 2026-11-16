@@ -74,16 +74,24 @@ assist:                # quality filter: only between Maia's own natural candida
   brilliant_chance: 0.85   # if a natural candidate sacrifices material and Stockfish rates it (nearly) best, play it this often
   brilliant_margin_cp: 40  # "nearly best" = at most 0.4 pawns below the best natural candidate
 
+tal_rules2:            # rules fitted on 46,000 Tal positions: Tal model + Stockfish's verdict on its natural moves
+  enabled: true        # (Tal was much more accurate than the model: 17 vs 29 cp average loss)
+  file: tal/tal-rules2.json
+  candidates: 10       # only Maia's 10 most natural moves are considered (stays human)
+  temperature: 0.75    # sampling, not always the top-scored move
+  depth: 12
+  min_clock_seconds: 40
+
 brilliant:             # Tal mode: always go for sacrifices that keep the position at least equal
   enabled: true
-  chance: 1.0          # 1.0 = always, if a sound sacrifice is among the natural moves
+  chance: 0.45         # Tal played an available sound sacrifice 43% of the time (study of 46,000 positions)
   min_eval_cp: -30     # position after the sacrifice must be at least equal (Stockfish, -0.3 or better)
   min_prob: 0.02       # only moves Maia gives 2%+ (a human could find them)
   depth: 12
   speculative: true    # also Tal's speculative sacrifices: objectively a bit worse, but they create an attack
   spec_min_eval_cp: -150   # may cost up to 1.5 pawns by Stockfish's count (never more)
-  spec_chance: 0.3     # how often it goes for one when available
-  max_eval_cp: 300     # only look for sacrifices while the game is still open (not when already +3)
+  spec_chance: 0.03    # Tal took an available speculative sacrifice only 2% of the time
+  max_eval_cp: 600     # Tal also sacrificed when clearly better (median +1.0 before his sacrifices)
   min_now_cp: -200
 
 guard:                 # Stockfish blunder guard. Maia still chooses every move.
