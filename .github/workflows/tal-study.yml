@@ -13,6 +13,9 @@ on:
       save:
         description: "Commit report + rules to the repo"
         default: "true"
+      debug:
+        description: "Seconds until a stack dump (test runs), empty = off"
+        default: ""
 permissions:
   contents: write
 jobs:
@@ -51,6 +54,7 @@ jobs:
           STUDY_HOLD: ${{ inputs.hold }}
           STUDY_DEPTH: ${{ inputs.depth }}
           PLAYER: tal
+          STUDY_DEBUG: ${{ inputs.debug }}
         run: python -u -m tal.study
       - uses: actions/upload-artifact@v4
         if: always()

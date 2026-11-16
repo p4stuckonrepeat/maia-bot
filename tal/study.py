@@ -149,9 +149,15 @@ def split_positions(games):
 
 
 def collect():
+    import faulthandler
+    import sys
+    if os.environ.get("STUDY_DEBUG"):
+        faulthandler.dump_traceback_later(int(os.environ["STUDY_DEBUG"]), exit=True, file=sys.stdout)
     from maia3.uci import Maia3UCIEngine, parse_args
     shard, shards = int(os.environ["STUDY_SHARD"]), int(os.environ["STUDY_SHARDS"])
+    t0 = time.time()
     games = tal_games(download_games())
+    log(f"downloaded {len(games)} games ({time.time() - t0:.0f}s)")
     items = split_positions(games)[shard::shards]
     log(f"shard {shard}/{shards}: {len(items)} positions")
     eng = Maia3UCIEngine(parse_args(["--model", "maia3-79m", "--checkpoint", CKPT]))
@@ -193,7 +199,7 @@ def collect():
         out.write(json.dumps({"split": split, "ply": ply, "phase": round(game_phase(b), 3), "best": best,
                               "tal": tal.uci(), "in_top": tal in [c[0] for c in cands[:len(top)]], "n_top": len(top),
                               "cands": rows}) + "\n")
-        if n % 200 == 0:
+        if n % 200 == 0 or n < 3:
             log(f"  {n}/{len(items)} ({time.time() - t0:.0f}s)")
     sf.quit()
     out.close()
