@@ -80,8 +80,17 @@ tal_rules2:            # rules fitted on 46,000 Tal positions: Tal model + Stock
   candidates: 10       # only Maia's 10 most natural moves are considered (stays human)
   temperature: 1.0     # sampling, not always the top-scored move (higher = more human variety)
   depth: 12
-  stockfish_weight: 0.5  # how much Stockfish's verdict counts (1 = Tal's real precision, 0.5 = room for human errors)
-  lapse_chance: 0.1    # 10% of moves: no rules, pure Maia instinct (moments of inattention)
+  stockfish_weight: 0.4  # how much Stockfish's verdict counts (1 = Tal's real precision, lower = more human errors)
+  lapse_chance: 0.12   # base: 12% of moves are pure Maia instinct (moments of inattention)
+  human_curve:         # measured on 250 games of 2300-2600 players (Lichess Elite Database)
+    enabled: true
+    start_move: 20     # from move 20 on, instinct moves get more frequent (humans tire / positions get harder)
+    per_move: 0.005    # +0.5% per move
+    sharp_extra: 0.08  # sharp positions (3+ captures possible): humans err more
+    ahead_cp: 300      # clearly ahead (+3): humans relax
+    ahead_extra: 0.15
+    ahead_stockfish_factor: 0.5
+    max_lapse: 0.35
   min_clock_seconds: 60  # under 1 minute left: plays on instinct only (more time-pressure mistakes)
   complicate_when_worse:   # Tal's practical chances: when worse, make it messy instead of defending passively
     enabled: true

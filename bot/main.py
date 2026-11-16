@@ -274,12 +274,15 @@ class Bot:
             return move, calc_note, None, top_prob
         notes = [calc_note] if calc_note else []
         rcfg = self.cfg.get("tal_rules2", {})
-        lapse = random.random() < float(rcfg.get("lapse_chance", 0))   # a moment of human inattention
+        lapse = (not rcfg.get("human_curve", {}).get("enabled")) and \
+            random.random() < float(rcfg.get("lapse_chance", 0))   # a moment of human inattention
         if rcfg.get("enabled") and not lapse and (clock is None or clock > rcfg.get("min_clock_seconds", 40) * 1000):
             cands = self.maia.choose(board, mcfg, opp_rating, candidates=int(rcfg.get("candidates", 10)))[1]
             if len(cands) >= 2:
                 natural = move
                 move, _ = self.guard.tal_rules(board, cands, rcfg)
+                if move is None:
+                    move = natural       # instinct move (human accuracy curve)
                 if move != natural:
                     notes.append(f"tal rules: {board.san(move)} instead of {board.san(natural)}")
         bcfg = self.cfg.get("brilliant", {})

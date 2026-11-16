@@ -271,13 +271,27 @@ class Guard:
         with self.lock:
             res = [self.after_pv(board, c["move"], color, depth) for c in cands]
         best = max(cp for cp, _ in res)
+        hc = rcfg.get("human_curve", {})
+        ahead_factor = 1.0
+        if hc.get("enabled"):
+            # human accuracy curve (measured on 250 games of 2300-2600 players): more instinct moves
+            # later in the game, in sharp positions, and when clearly ahead ("relaxing")
+            p = float(rcfg.get("lapse_chance", 0))
+            p += float(hc.get("per_move", 0.005)) * max(0, board.fullmove_number - int(hc.get("start_move", 20)))
+            if sum(1 for m in board.legal_moves if board.is_capture(m)) >= 3:
+                p += float(hc.get("sharp_extra", 0.08))
+            if best > float(hc.get("ahead_cp", 300)):
+                p += float(hc.get("ahead_extra", 0.15))
+                ahead_factor = float(hc.get("ahead_stockfish_factor", 0.5))
+            if random.random() < min(p, float(hc.get("max_lapse", 0.35))):
+                return None, []          # play the natural (instinct) move
         scored = []
         for c, (cp, pv) in zip(cands, res):
             wdl = c.get("wdl", (500, 0, 500))
             vals = base_features(board, c["move"], c["policy"], (wdl[0] + 0.5 * wdl[1]) / 1000) + \
                 extra_features(board, c["move"], cp, best, pv)
             f = dict(zip(FEATURES, vals))
-            sfw = float(rcfg.get("stockfish_weight", 1.0))   # <1 = Stockfish counts less -> more human errors
+            sfw = float(rcfg.get("stockfish_weight", 1.0)) * ahead_factor   # <1 = Stockfish counts less -> more human errors
             sfw_here = sfw
             cw = rcfg.get("complicate_when_worse", {})
             worse = cw.get("enabled") and best < float(cw.get("below_cp", -80))
