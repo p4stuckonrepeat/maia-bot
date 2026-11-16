@@ -1,0 +1,24 @@
+name: "Freeze a model copy"
+on:
+  workflow_dispatch:
+    inputs:
+      from_release:
+        default: "tal-model"
+      asset:
+        default: "tal-79m.pt"
+      to_release:
+        default: "tal-live-v1"
+permissions:
+  contents: write
+jobs:
+  freeze:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - run: |
+          gh release download "${{ inputs.from_release }}" -p "${{ inputs.asset }}"
+          sha256sum "${{ inputs.asset }}"
+          gh release view "${{ inputs.to_release }}" >/dev/null 2>&1 || gh release create "${{ inputs.to_release }}" -t "Frozen model: ${{ inputs.to_release }}" -n "Exact copy of ${{ inputs.from_release }}/${{ inputs.asset }}, frozen on $(date -u +%F)."
+          gh release upload "${{ inputs.to_release }}" "${{ inputs.asset }}" --clobber
