@@ -33,8 +33,8 @@ def run(env_extra):
     return json.load(open("tal-info.json"))
 
 
-def download(name, path):
-    rel = requests.get(f"https://api.github.com/repos/{REPO}/releases/tags/{TAG}", headers=GH, timeout=30).json()
+def download(name, path, tag=TAG):
+    rel = requests.get(f"https://api.github.com/repos/{REPO}/releases/tags/{tag}", headers=GH, timeout=30).json()
     a = next(a for a in rel["assets"] if a["name"] == name)
     with requests.get(a["url"], headers={**GH, "Accept": "application/octet-stream"}, stream=True, timeout=600) as r:
         r.raise_for_status()
@@ -59,6 +59,24 @@ def main():
             out["error"] = str(e)
         json.dump(out, open("pretrain-info.json", "w"), indent=1)
         upload(TAG, "pretrain-info.json", "pretrain-info.json")   # done signal
+        return
+    if mode == "antiblunder":
+        out = {"gpu": gpu}
+        try:
+            download("study.jsonl.gz", "study.jsonl.gz")
+            download("tal-79m.pt", "tal-79m.pt", tag="tal-model")
+            env = {**os.environ, "STUDY_FILE": "study.jsonl.gz", "TAL_RESUME": "tal-79m.pt", "AB_OUT": "antiblunder.pt"}
+            p = subprocess.run(["python", "-u", "-m", "tal.antiblunder"], env=env, stdout=subprocess.PIPE,
+                               stderr=subprocess.STDOUT, text=True)
+            print(p.stdout, flush=True)
+            if p.returncode != 0:
+                raise RuntimeError("anti-blunder training failed:\n" + "\n".join(p.stdout.splitlines()[-25:]))
+            out.update(json.load(open("antiblunder-info.json")))
+            upload(TAG, "antiblunder.pt", "antiblunder.pt")
+        except Exception as e:
+            out["error"] = str(e)
+        json.dump(out, open("antiblunder-info.json", "w"), indent=1)
+        upload(TAG, "antiblunder-info.json", "antiblunder-info.json")   # done signal
         return
     name = os.environ["PLAN_VARIANT"]
     blocks, lr, epochs, minutes = VARIANTS[name]

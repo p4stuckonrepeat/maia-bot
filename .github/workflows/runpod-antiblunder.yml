@@ -1,0 +1,77 @@
+name: "Tal: anti-blunder training on RunPod"
+on:
+  workflow_dispatch:
+    inputs:
+      study_run:
+        description: "Run id of the Tal deep study"
+        default: "43790388675"
+permissions:
+  contents: write
+  actions: read
+concurrency: runpod-antiblunder
+env:
+  RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+  GH_TOKEN: ${{ github.token }}
+  GH_REPO: ${{ github.repository }}
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: shard-*
+          merge-multiple: true
+          run-id: ${{ inputs.study_run }}
+          github-token: ${{ github.token }}
+      - name: Merge study data and upload
+        run: |
+          python3 - <<'PY'
+          import glob, gzip, json, re
+          n = 0
+          with gzip.open("study.jsonl.gz", "wt") as out:
+              for f in sorted(glob.glob("study-shard-*.jsonl")):
+                  s = int(re.search(r"(\d+)", f.split("shard-")[1]).group(1))
+                  for line in open(f):
+                      r = json.loads(line); r["shard"] = s
+                      out.write(json.dumps(r) + "\n"); n += 1
+          print("rows", n)
+          PY
+          gh release view tal-runs >/dev/null 2>&1 || gh release create tal-runs -t "Tal training runs" -n "intermediate files"
+          gh release upload tal-runs study.jsonl.gz --clobber
+  train:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+      - name: Start GPU
+        run: echo "POD=$(python3 tools/runpod.py start antiblunder PLAN_MODE=antiblunder)" >> "$GITHUB_ENV"
+      - name: Wait
+        run: python3 tools/runpod.py wait "$POD" tal-runs antiblunder-info.json 75
+      - name: Shut the GPU down (always)
+        if: always()
+        run: '[ -n "$POD" ] && python3 tools/runpod.py stop "$POD" || echo "no pod"'
+      - name: Result
+        run: |
+          gh release download tal-runs -p antiblunder-info.json --clobber
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json, os
+          d = json.load(open("antiblunder-info.json"))
+          if "error" in d:
+              print("## Anti-blunder training failed\n```\n" + d["error"][-1500:] + "\n```"); raise SystemExit(1)
+          print("## Anti-blunder training (GPU: %s)\n| | Exact Tal move | First choice is a blunder |\n|---|---|---|" % d.get("gpu"))
+          for h in d["history"]:
+              print(f"| {h[0]} | {h[1]:.1%} | {h[2]:.2%} |")
+          print(f"\nSaved: {d['improved']}")
+          open(os.environ["GITHUB_ENV"], "a").write(f"IMPROVED={str(d['improved']).lower()}\n")
+          PY
+      - name: Save as the Tal model
+        if: env.IMPROVED == 'true'
+        run: |
+          gh release download tal-model -p tal-79m.pt -D old
+          mv old/tal-79m.pt tal-79m-before-antiblunder.pt
+          gh release download tal-runs -p antiblunder.pt
+          mv antiblunder.pt tal-79m.pt
+          gh release upload tal-model tal-79m.pt tal-79m-before-antiblunder.pt antiblunder-info.json --clobber
+          echo "saved as tal-79m.pt (old model kept as tal-79m-before-antiblunder.pt)" | tee -a "$GITHUB_STEP_SUMMARY"
