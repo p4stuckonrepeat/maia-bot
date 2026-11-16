@@ -46,7 +46,7 @@ style:                 # consistent playing style (one "person" across games)
   min_relative_prob: 0.25 # rules may pick moves at least a quarter as likely as Maia's top choice
   plans:               # classic theory between natural moves: free the worst piece, pawn breaks, go for the king
     enabled: true
-    strength: 1.0      # 0 = off, 1 = a clear nudge, 2 = strong
+    strength: 1.5      # 0 = off, 1 = a clear nudge, 2 = strong (Tal show: pawn breaks, pieces to the king)
     min_relative_prob: 0.25  # only moves at least a quarter as likely as Maia's top choice
 
 timing:                # human-like thinking time, based only on the move (not on the clock)
@@ -79,7 +79,7 @@ tal_rules2:            # rules fitted on 46,000 Tal positions: Tal model + Stock
   file: tal/tal-rules2.json
   candidates: 10       # only Maia's 10 most natural moves are considered (stays human)
   temperature: 0.5     # sampling between Tal-scored moves (lower = closer to Tal)
-  tal_traits_boost: 1.5  # Tal traits (attack, no trades, complications, sacrifices) count 1.5x
+  tal_traits_boost: 2.0  # Tal show: Tal traits (attack, no trades, complications, sacrifices) count 2x
   depth: 12
   stockfish_weight: 0.08  # Stockfish barely counts: fewer engine top moves, Tal style decides (rapid)
   lapse_chance: 0.15   # base: 15% of moves without Stockfish's precision (moments of inattention)
@@ -100,7 +100,7 @@ tal_rules2:            # rules fitted on 46,000 Tal positions: Tal model + Stock
   min_clock_seconds: 60  # under 1 minute left: plays on instinct only (more time-pressure mistakes)
   complicate_when_worse:   # Tal's practical chances: when worse, make it messy instead of defending passively
     enabled: true
-    below_cp: -80        # "worse" = Stockfish -0.8 or less
+    below_cp: 100        # Tal show: seek complications unless clearly better (+1.0 or more), not only when worse
     stockfish_factor: 0.6  # Stockfish's verdict counts less then (accepts slightly weaker but trickier moves)
     max_extra_loss_cp: 150 # but the bonus only goes to moves at most 1.5 pawns below the best natural move
     bonus:
