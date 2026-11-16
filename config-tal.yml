@@ -121,9 +121,9 @@ brilliant:             # Tal mode: always go for sacrifices that keep the positi
   prefer_within_cp: 50 # prefer sacrifices within 0.5 pawns of the best move (that's what chess.com marks brilliant)
   depth: 12
   speculative: true    # also Tal's speculative sacrifices: objectively a bit worse, but they create an attack
-  spec_min_eval_cp: -180   # position after a speculative sacrifice may be up to -1.8
+  spec_min_eval_cp: -250   # Tal mode: position after a speculative sacrifice may be up to -2.5
   spec_chance: 1.0     # Tal takes over: always go for a speculative sacrifice when one is there
-  max_cost_cp: 200     # a sacrifice may cost at most 2 pawns compared with the best natural move (never throw a win away)
+  max_cost_cp: 300     # Tal mode: a sacrifice may cost up to 3 pawns compared with the best natural move
   sound_max_cost_cp: 150 # "about equal" sacrifices count as sound only if they cost at most 1.5 pawns vs the best move
   spec_free_cost_cp: 150 # speculative sacrifices costing at most 1.5 pawns are allowed even without a direct king attack
   tal_motifs: true     # speculative sacrifices also allowed when they are a favourite motif
@@ -134,10 +134,10 @@ brilliant:             # Tal mode: always go for sacrifices that keep the positi
 guard:                 # Stockfish blunder guard. Maia still chooses every move.
   enabled: true        # true = ON, false = OFF (applies mid-game within ~30 s)
   playable_cp: -150    # only check moves when the position is at least this good for the bot
-  lost_cp: -250        # veto a move only if it leaves the bot at this evaluation or worse...
-  min_drop_cp: 300     # ...and it costs at least this much
+  lost_cp: -500        # Tal mode: veto only real disasters that leave the bot clearly lost (-5)...
+  min_drop_cp: 600     # ...and cost 6+ pawns (hanging the queen etc.); mates are always blocked
   winning_cp: 150      # when the bot is winning (+1.5 or more)...
-  winning_floor_cp: -50  # ...it may drop to about equal, but never into a losing position
+  winning_floor_cp: -300 # Tal mode: a winning position may even turn worse, for the sake of the attack
   depth: 14            # Stockfish search depth for the check
   replace_with: softer_mistake  # softer_mistake = play a smaller mistake instead; maia_next = Maia's next safe move
   softer_drop_cp: 300  # the smaller mistake aims ~3 pawns below the position before...
