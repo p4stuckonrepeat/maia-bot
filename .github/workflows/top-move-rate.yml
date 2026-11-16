@@ -1,0 +1,39 @@
+name: "Top-move rate per player (from the players study)"
+on:
+  workflow_dispatch:
+    inputs:
+      study_run:
+        default: "43870503589"
+permissions:
+  contents: read
+  actions: read
+jobs:
+  rate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: shard-*
+          merge-multiple: true
+          run-id: ${{ inputs.study_run }}
+          github-token: ${{ github.token }}
+      - name: Compute
+        run: |
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import glob, json, collections, statistics
+          by = collections.defaultdict(list)
+          for f in glob.glob("study-shard-*.jsonl"):
+              for line in open(f):
+                  r = json.loads(line); by[r["player"]].append(r)
+          rows = []
+          for who, rs in by.items():
+              top = near = 0
+              for r in rs:
+                  c = next(c for c in r["cands"] if c["m"] == r["tal"])
+                  top += c["cp"] >= r["best"]
+                  near += c["cp"] >= r["best"] - 20
+              rows.append((top / len(rs), near / len(rs), who, len(rs)))
+          print("| Player | Stockfish's top move | Top move or within 0.2 pawns | Positions |\n|---|---|---|---|")
+          for t, n, who, k in sorted(rows, reverse=True):
+              print(f"| {who} | {t:.0%} | {n:.0%} | {k} |")
+          PY
