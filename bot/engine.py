@@ -290,7 +290,10 @@ class Guard:
                 p += float(hc.get("late_extra", 0.0))
                 ahead_factor *= float(hc.get("late_stockfish_factor", 1.0))
             if random.random() < min(p, float(hc.get("max_lapse", 0.35))):
-                return None, []          # play the natural (instinct) move
+                if hc.get("lapse_mode", "natural") != "tal":
+                    return None, []      # play the natural (instinct) move
+                # Tal-style lapse: still Tal's preferences (attack, complications), just without Stockfish's precision
+                ahead_factor *= float(hc.get("lapse_stockfish_factor", 0.0))
         scored = []
         for c, (cp, pv) in zip(cands, res):
             wdl = c.get("wdl", (500, 0, 500))
@@ -303,7 +306,8 @@ class Guard:
             worse = cw.get("enabled") and best < float(cw.get("below_cp", -80))
             if worse:   # Tal's practical chances: when worse, prefer messy, forcing positions, keep pieces on
                 sfw_here = sfw * float(cw.get("stockfish_factor", 0.6))
-            logit = sum(w[n] * f[n] * (sfw_here if n == "sf_loss" else 1.0) for n in names)
+            boost = float(rcfg.get("tal_traits_boost", 1.0))   # >1 = Tal's traits (attack, no trades, sacrifices) count more
+            logit = sum(w[n] * f[n] * (sfw_here if n == "sf_loss" else (1.0 if n == "logp" else boost)) for n in names)
             if worse and best - cp <= float(cw.get("max_extra_loss_cp", 150)):
                 logit += sum(float(v) * f.get(n, 0.0) for n, v in cw.get("bonus", {}).items())
             if pat:   # Tal's move patterns (piece to square, captures, checks per phase), learned from his games
