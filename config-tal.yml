@@ -78,8 +78,8 @@ tal_rules2:            # rules fitted on 46,000 Tal positions: Tal model + Stock
   enabled: true        # (Tal was much more accurate than the model: 17 vs 29 cp average loss)
   file: tal/tal-rules2.json
   candidates: 10       # only Maia's 10 most natural moves are considered (stays human)
-  temperature: 1.0     # sampling, not always the top-scored move (higher = more human variety)
-  tal_traits_boost: 1.6  # Tal's own traits (keep pieces on, complications, threats, sacrifices) count 1.6x
+  temperature: 0.5     # sampling between Tal-scored moves (lower = closer to Tal: 54% exact Tal moves)
+  tal_traits_boost: 1.0  # Tal traits exactly as fitted on his games
   depth: 12
   stockfish_weight: 0.4  # how much Stockfish's verdict counts (1 = Tal's real precision, lower = more human errors)
   lapse_chance: 0.12   # base: 12% of moves are pure Maia instinct (moments of inattention)
