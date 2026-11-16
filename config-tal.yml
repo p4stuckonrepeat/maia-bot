@@ -79,7 +79,7 @@ tal_rules2:            # rules fitted on 46,000 Tal positions: Tal model + Stock
   file: tal/tal-rules2.json
   candidates: 10       # only Maia's 10 most natural moves are considered (stays human)
   temperature: 0.5     # sampling between Tal-scored moves (lower = closer to Tal)
-  tal_traits_boost: 2.0  # Tal show: Tal traits (attack, no trades, complications, sacrifices) count 2x
+  tal_traits_boost: 3.0  # Tal show: Tal traits (attack, no trades, complications, sacrifices) count 3x
   depth: 12
   stockfish_weight: 0.08  # Stockfish barely counts: fewer engine top moves, Tal style decides (rapid)
   lapse_chance: 0.15   # base: 15% of moves without Stockfish's precision (moments of inattention)
@@ -100,16 +100,16 @@ tal_rules2:            # rules fitted on 46,000 Tal positions: Tal model + Stock
   min_clock_seconds: 60  # under 1 minute left: plays on instinct only (more time-pressure mistakes)
   complicate_when_worse:   # Tal's practical chances: when worse, make it messy instead of defending passively
     enabled: true
-    below_cp: 100        # Tal show: seek complications unless clearly better (+1.0 or more), not only when worse
+    below_cp: 200        # Tal show: seek complications unless clearly winning (+2.0 or more)
     stockfish_factor: 0.6  # Stockfish's verdict counts less then (accepts slightly weaker but trickier moves)
     max_extra_loss_cp: 150 # but the bonus only goes to moves at most 1.5 pawns below the best natural move
     bonus:
-      complexity: 0.6    # positions with many captures / tension
-      threat: 0.4        # moves that create threats
-      forcing: 0.3       # checks, captures, threats
-      sacrifice: 0.3
-      even_trade: -0.6   # avoid simple trades when worse
-      queen_trade: -1.0  # keep the queens on
+      complexity: 1.0    # positions with many captures / tension
+      threat: 0.8        # moves that create threats
+      forcing: 0.6       # checks, captures, threats
+      sacrifice: 0.8
+      even_trade: -1.0   # avoid simple trades
+      queen_trade: -1.6  # keep the queens on
 
 brilliant:             # Tal mode: always go for sacrifices that keep the position at least equal
   enabled: true
@@ -121,11 +121,11 @@ brilliant:             # Tal mode: always go for sacrifices that keep the positi
   prefer_within_cp: 50 # prefer sacrifices within 0.5 pawns of the best move (that's what chess.com marks brilliant)
   depth: 12
   speculative: true    # also Tal's speculative sacrifices: objectively a bit worse, but they create an attack
-  spec_min_eval_cp: -150   # may cost up to 1.5 pawns by Stockfish's count (never more)
+  spec_min_eval_cp: -180   # position after a speculative sacrifice may be up to -1.8
   spec_chance: 1.0     # Tal takes over: always go for a speculative sacrifice when one is there
   max_cost_cp: 200     # a sacrifice may cost at most 2 pawns compared with the best natural move (never throw a win away)
   sound_max_cost_cp: 150 # "about equal" sacrifices count as sound only if they cost at most 1.5 pawns vs the best move
-  spec_free_cost_cp: 120 # speculative sacrifices costing at most 1.2 pawns are allowed even without a direct king attack
+  spec_free_cost_cp: 150 # speculative sacrifices costing at most 1.5 pawns are allowed even without a direct king attack
   tal_motifs: true     # speculative sacrifices also allowed when they are a favourite motif
   motifs_file: tal/brilliant-motifs.json  # Tal + 21 attacking players (Morphy, Keres, Nezhmetdinov, Spielmann, ...)
   max_eval_cp: 600     # Tal also sacrificed when clearly better (median +1.0 before his sacrifices)
