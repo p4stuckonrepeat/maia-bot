@@ -20,6 +20,11 @@ VERSIONS = {
     "v3 (live now)": {"sfw": 0.4, "temp": 1.0, "boost": 1.6, "lapse": 0.12, "lapse_mode": "tal", "model_temp": 0.75, "sac": 1.0,
                       "curve": {"start": 20, "per_move": 0.008, "ahead_cp": 300, "ahead_extra": 0.15, "ahead_sf": 0.5,
                                 "late": 30, "late_extra": 0.08, "late_sf": 0.6, "max": 0.45}},
+    "v3 + Tal's real sacrifice rate (45%)": {"sfw": 0.4, "temp": 1.0, "boost": 1.6, "lapse": 0.12, "lapse_mode": "tal", "model_temp": 0.75, "sac": 0.45, "curve": "v3"},
+    "v3, temp 0.6, sac 45%": {"sfw": 0.4, "temp": 0.6, "boost": 1.6, "lapse": 0.12, "lapse_mode": "tal", "model_temp": 0.75, "sac": 0.45, "curve": "v3"},
+    "v3, temp 0.5, boost 1.0, sac 45%": {"sfw": 0.4, "temp": 0.5, "boost": 1.0, "lapse": 0.12, "lapse_mode": "tal", "model_temp": 0.75, "sac": 0.45, "curve": "v3"},
+    "v3, temp 0.4, boost 1.3, sac 45%": {"sfw": 0.4, "temp": 0.4, "boost": 1.3, "lapse": 0.12, "lapse_mode": "tal", "model_temp": 0.75, "sac": 0.45, "curve": "v3"},
+    "v3, temp 0.3, boost 1.3, sac 45%": {"sfw": 0.4, "temp": 0.3, "boost": 1.3, "lapse": 0.12, "lapse_mode": "tal", "model_temp": 0.75, "sac": 0.45, "curve": "v3"},
     "Tal rules, best-scored move (upper bound)": {"argmax": True, "sfw": 1.0, "boost": 1.0},
 }
 
@@ -63,6 +68,8 @@ def tal_prob(r, v, rules, F):
     move_no = r["ply"] // 2 + 1
     lapse, sf_factor = v.get("lapse", 0.0), 1.0
     cv = v.get("curve")
+    if cv == "v3":
+        cv = VERSIONS["v3 (live now)"]["curve"]
     if cv:
         lapse += cv["per_move"] * max(0, move_no - cv["start"])
         if r["best"] > cv["ahead_cp"]:
@@ -84,6 +91,15 @@ def tal_prob(r, v, rules, F):
     return dist[ti] if ti is not None else 0.0
 
 
+def exp_loss(r, v, rules, F):
+    cands = r["cands"][:r["n_top"]]
+    out = 0.0
+    for i, c in enumerate(cands):
+        r2 = dict(r, tal=c["m"])
+        out += tal_prob(r2, v, rules, F) * min(500, max(0, r["best"] - c["cp"]))
+    return out
+
+
 def main():
     import tal.study as study
     F = {n: i for i, n in enumerate(study.FEATURES)}
@@ -91,10 +107,11 @@ def main():
     with gzip.open(os.environ.get("STUDY_FILE", "study.jsonl.gz"), "rt") as f:
         hold = [r for r in (json.loads(l) for l in f) if r["split"] == "hold"]
     L = [f"# How often each version plays exactly Tal's move ({len(hold)} Tal positions the bot never trained on)", "",
-         "| Version | Exact Tal move |", "|---|---|"]
+         "| Version | Exact Tal move | Expected loss (cp, Tal himself ~17) |", "|---|---|---|"]
     for name, v in VERSIONS.items():
         acc = sum(tal_prob(r, v, rules, F) for r in hold) / len(hold)
-        L.append(f"| {name} | {acc:.1%} |")
+        loss = sum(exp_loss(r, v, rules, F) for r in hold) / len(hold)
+        L.append(f"| {name} | {acc:.1%} | {loss:.0f} |")
     text = "\n".join(L)
     print(text)
     if os.environ.get("GITHUB_STEP_SUMMARY"):
