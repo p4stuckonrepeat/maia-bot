@@ -1,0 +1,35 @@
+{
+ "favourite_sacrifices": {
+  "knight to d5": 13,
+  "knight takes e5": 7,
+  "rook takes g7 +": 15,
+  "knight takes f7": 14,
+  "bishop takes f7 +": 8,
+  "rook takes f4": 5,
+  "knight to f5": 8,
+  "rook takes f6": 7,
+  "rook takes c6": 11,
+  "rook takes f7": 4,
+  "rook takes e6": 8,
+  "knight to e6": 3,
+  "rook takes e7": 3,
+  "rook takes h7 +": 3,
+  "rook takes g6 +": 5,
+  "rook takes e5": 3,
+  "rook takes d4": 7,
+  "bishop takes h7 +": 3,
+  "bishop takes f7": 3,
+  "rook takes c4": 3,
+  "rook takes d5": 8,
+  "knight to f5 +": 4,
+  "rook takes e3": 4,
+  "knight to c5": 3,
+  "queen takes e6": 3,
+  "knight to e4": 3,
+  "rook takes c5": 3
+ },
+ "sources": [
+  "tal/tal-motifs.json",
+  "tal/attack-motifs.json"
+ ]
+}
