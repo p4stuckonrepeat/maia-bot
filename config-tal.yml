@@ -145,9 +145,9 @@ guard:                 # Stockfish blunder guard. Maia still chooses every move.
   min_clock_seconds: 15  # skip the check when the bot's clock is lower than this
   late:                # from move 30: looser, like a human grandmaster who sometimes spoils a won game
     start_move: 30
-    winning_floor_cp: -150 # a winning position may drop to slightly worse (not only equal)
-    lost_cp: -400      # only veto real disasters: ending clearly lost (-4)...
-    min_drop_cp: 500   # ...and costing 5+ pawns (hanging the queen etc.); mates are still always blocked
+    winning_floor_cp: -300 # same as the Tal-mode guard above (late game no stricter than early)
+    lost_cp: -500
+    min_drop_cp: 600
 
 challenges:
   variants: [standard]
