@@ -86,12 +86,12 @@ tal_rules2:            # rules fitted on 46,000 Tal positions: Tal model + Stock
     enabled: true
     start_move: 20     # from move 20 on, instinct moves get more frequent (humans tire / positions get harder)
     per_move: 0.008    # +0.8% per move
-    sharp_extra: 0.08  # sharp positions (3+ captures possible): humans err more
+    sharp_extra: 0.04  # sharp positions (3+ captures possible): humans err more
     ahead_cp: 300      # clearly ahead (+3): humans relax
     ahead_extra: 0.15
     ahead_stockfish_factor: 0.5
     late_start: 30     # after move 30 strong humans err clearly more (measured): match that
-    late_extra: 0.12
+    late_extra: 0.08
     late_stockfish_factor: 0.6
     max_lapse: 0.45
   min_clock_seconds: 60  # under 1 minute left: plays on instinct only (more time-pressure mistakes)
