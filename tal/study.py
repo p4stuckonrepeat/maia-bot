@@ -166,6 +166,14 @@ def collect():
     sf.configure({"Threads": 4, "Hash": 256})
     out = open(f"study-shard-{shard}.jsonl", "w")
     t0 = time.time()
+    try:
+        _collect_loop(items, eng, sf, out, t0)
+    finally:
+        sf.quit()        # otherwise a crash leaves the process hanging
+        out.close()
+
+
+def _collect_loop(items, eng, sf, out, t0):
     for n, (split, gs, gi, ply) in enumerate(items):
         g = gs[gi]
         b = chess.Board()
@@ -196,13 +204,11 @@ def collect():
         for (m, p, e), (cp, pv) in zip(cands, sfres):
             f = base_features(b, m, p, e) + extra_features(b, m, cp, best, pv)
             rows.append({"m": m.uci(), "p": round(p, 5), "cp": cp, "f": [round(x, 4) for x in f]})
-        out.write(json.dumps({"split": split, "ply": ply, "phase": round(game_phase(b), 3), "best": best,
+        out.write(json.dumps({"split": split, "ply": ply, "phase": game_phase(b), "best": best,
                               "tal": tal.uci(), "in_top": tal in [c[0] for c in cands[:len(top)]], "n_top": len(top),
                               "cands": rows}) + "\n")
         if n % 200 == 0 or n < 3:
             log(f"  {n}/{len(items)} ({time.time() - t0:.0f}s)")
-    sf.quit()
-    out.close()
 
 
 # ---------------------------------------------------------------- report
