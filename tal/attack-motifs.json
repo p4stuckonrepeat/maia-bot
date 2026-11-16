@@ -1,0 +1,116 @@
+{
+ "favourite_sacrifices": {
+  "rook takes h7 +": 3,
+  "rook takes g7 +": 8,
+  "bishop takes f7 +": 3,
+  "rook takes c6": 7,
+  "rook takes g6 +": 5,
+  "rook takes e5": 3,
+  "rook takes d4": 7,
+  "bishop takes h7 +": 3,
+  "bishop takes f7": 3,
+  "rook takes c4": 3,
+  "rook takes d5": 8,
+  "knight to f5 +": 4,
+  "rook takes e3": 4,
+  "rook takes e6": 4,
+  "knight to c5": 3,
+  "queen takes e6": 3,
+  "knight to e4": 3,
+  "knight takes f7": 7,
+  "rook takes f6": 3,
+  "knight to d5": 5,
+  "rook takes c5": 3,
+  "knight to f5": 3
+ },
+ "players": {
+  "Alekhine": {
+   "brilliant_per_100": 0.36,
+   "avg_loss": 22.8
+  },
+  "Anderssen": {
+   "brilliant_per_100": 0.4,
+   "avg_loss": 37.8
+  },
+  "Bronstein": {
+   "brilliant_per_100": 0.4,
+   "avg_loss": 19.7
+  },
+  "Carlsen": {
+   "brilliant_per_100": 0.12,
+   "avg_loss": 19.2
+  },
+  "Fischer": {
+   "brilliant_per_100": 0.32,
+   "avg_loss": 17.4
+  },
+  "Geller": {
+   "brilliant_per_100": 0.44,
+   "avg_loss": 16.9
+  },
+  "Ivanchuk": {
+   "brilliant_per_100": 0.56,
+   "avg_loss": 17.1
+  },
+  "Kasparov": {
+   "brilliant_per_100": 0.24,
+   "avg_loss": 16.6
+  },
+  "Keres": {
+   "brilliant_per_100": 0.56,
+   "avg_loss": 17.5
+  },
+  "Larsen": {
+   "brilliant_per_100": 0.44,
+   "avg_loss": 19.1
+  },
+  "Morozevich": {
+   "brilliant_per_100": 0.36,
+   "avg_loss": 21.4
+  },
+  "Morphy": {
+   "brilliant_per_100": 0.96,
+   "avg_loss": 28.0
+  },
+  "Nezhmetdinov": {
+   "brilliant_per_100": 0.49,
+   "avg_loss": 19.1
+  },
+  "Polgar": {
+   "brilliant_per_100": 0.4,
+   "avg_loss": 20.0
+  },
+  "Polugaevsky": {
+   "brilliant_per_100": 0.24,
+   "avg_loss": 18.7
+  },
+  "Shirov": {
+   "brilliant_per_100": 0.32,
+   "avg_loss": 20.6
+  },
+  "Short": {
+   "brilliant_per_100": 0.4,
+   "avg_loss": 18.6
+  },
+  "Spassky": {
+   "brilliant_per_100": 0.4,
+   "avg_loss": 17.1
+  },
+  "Spielmann": {
+   "brilliant_per_100": 0.44,
+   "avg_loss": 20.8
+  },
+  "Tal": {
+   "brilliant_per_100": 0.24,
+   "avg_loss": 17.9
+  },
+  "Topalov": {
+   "brilliant_per_100": 0.4,
+   "avg_loss": 16.6
+  },
+  "Velimirovic": {
+   "brilliant_per_100": 0.29,
+   "avg_loss": 24.2
+  }
+ }
+}
