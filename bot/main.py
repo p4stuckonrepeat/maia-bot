@@ -286,10 +286,11 @@ class Bot:
                 if move != natural:
                     notes.append(f"tal rules: {board.san(move)} instead of {board.san(natural)}")
         bcfg = self.cfg.get("brilliant", {})
-        if bcfg.get("enabled"):
-            if len(top) < 2:
-                top = self.maia.choose(board, mcfg, opp_rating, candidates=10)[1]
-            move, n = self.guard.brilliant(board, move, top, bcfg)
+        if bcfg.get("enabled") and (clock is None or clock > bcfg.get("min_clock_seconds", 60) * 1000):
+            btop = top
+            if len(top) < int(bcfg.get("candidates", 10)):
+                btop = self.maia.choose(board, mcfg, opp_rating, candidates=int(bcfg.get("candidates", 10)))[1]
+            move, n = self.guard.brilliant(board, move, btop, bcfg)
             if n:
                 notes.append(n)
         acfg = self.cfg.get("assist", {})

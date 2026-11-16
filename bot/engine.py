@@ -137,7 +137,8 @@ class Guard:
         if piece is None or piece.piece_type in (chess.KING, chess.PAWN):
             return False                     # a real sacrifice offers a piece
         if not pv or pv[0].to_square != move.to_square:
-            return False                     # the opponent's best reply must take the offered piece
+            # chess.com also counts a piece left en prise ("offered") when taking it would be bad for them
+            return bool(getattr(self, "count_offers", False)) and self.offered(board, move)
         start = self.material(board, color)
         b = board.copy(stack=False)
         line = [move] + pv
@@ -151,6 +152,21 @@ class Guard:
             return False
         settled = deltas[2] if len(deltas) >= 3 else deltas[1]   # after their capture and our next move
         return min(deltas[1], settled) <= -min_material and settled <= -min_material
+
+    def offered(self, board, move):
+        """The moved piece (knight or more) stands where the opponent can take it for less than it is worth."""
+        piece = board.piece_at(move.from_square)
+        captured = board.piece_type_at(move.to_square)
+        b = board.copy(stack=False)
+        b.push(move)
+        att = b.attackers(not board.turn, move.to_square)
+        if not att or piece.piece_type not in (chess.KNIGHT, chess.BISHOP, chess.ROOK, chess.QUEEN):
+            return False
+        cheapest = min(self.VALUES[b.piece_type_at(s)] or 100 for s in att)
+        gain = self.VALUES[captured] if captured else 0
+        defended = bool(b.attackers(board.turn, move.to_square))
+        loss = self.VALUES[piece.piece_type] - (cheapest if defended else 0)
+        return loss - gain >= 2
 
     def check(self, board, move, gcfg, candidates_fn):
         """Return (final move, note or None)."""
@@ -350,6 +366,7 @@ class Guard:
         """Sacrifice hunter on its own (Tal mode): if a natural candidate sacrifices material and the
         position after it is still at least `min_eval_cp` (about equal), play it. Return (move, note or None)."""
         color, depth = board.turn, int(bcfg.get("depth", 12))
+        self.count_offers = bool(bcfg.get("count_offers", False))
         board.push(move)
         mate_now = board.is_checkmate()
         board.pop()
@@ -373,6 +390,11 @@ class Guard:
                         and (self.attacking(board, c["move"]) or self.tal_motif(board, c["move"], bcfg)):
                     sacs.append((c, sc, "speculative"))
         sound = [x for x in sacs if x[2] == "sound"]
+        near = float(bcfg.get("prefer_within_cp", 0))
+        if near and sound:
+            best_sc = max(self.after_pv(board, c["move"], color, depth)[0] for c in cands[:3])
+            close = [x for x in sound if x[1] >= best_sc - near]   # what chess.com marks as brilliant
+            sound = close or sound
         spec = [x for x in sacs if x[2] == "speculative"]
         if sound and random.random() < float(bcfg.get("chance", 1.0)):
             pool = sound
