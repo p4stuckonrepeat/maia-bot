@@ -90,7 +90,10 @@ tal_rules2:            # rules fitted on 46,000 Tal positions: Tal model + Stock
     ahead_cp: 300      # clearly ahead (+3): humans relax
     ahead_extra: 0.15
     ahead_stockfish_factor: 0.5
-    max_lapse: 0.35
+    late_start: 30     # after move 30 strong humans err clearly more (measured): match that
+    late_extra: 0.12
+    late_stockfish_factor: 0.6
+    max_lapse: 0.45
   min_clock_seconds: 60  # under 1 minute left: plays on instinct only (more time-pressure mistakes)
   complicate_when_worse:   # Tal's practical chances: when worse, make it messy instead of defending passively
     enabled: true

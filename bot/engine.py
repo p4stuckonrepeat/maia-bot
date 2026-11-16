@@ -283,6 +283,9 @@ class Guard:
             if best > float(hc.get("ahead_cp", 300)):
                 p += float(hc.get("ahead_extra", 0.15))
                 ahead_factor = float(hc.get("ahead_stockfish_factor", 0.5))
+            if board.fullmove_number > int(hc.get("late_start", 999)):   # late game: humans get less precise
+                p += float(hc.get("late_extra", 0.0))
+                ahead_factor *= float(hc.get("late_stockfish_factor", 1.0))
             if random.random() < min(p, float(hc.get("max_lapse", 0.35))):
                 return None, []          # play the natural (instinct) move
         scored = []
