@@ -154,6 +154,9 @@ class Guard:
 
     def check(self, board, move, gcfg, candidates_fn):
         """Return (final move, note or None)."""
+        late = gcfg.get("late", {})
+        if late and board.fullmove_number > int(late.get("start_move", 999)):
+            gcfg = {**gcfg, **{k: v for k, v in late.items() if k != "start_move"}}   # looser late-game guard
         color, depth = board.turn, int(gcfg["depth"])
         with self.lock:
             before = self.score(board, color, depth)
