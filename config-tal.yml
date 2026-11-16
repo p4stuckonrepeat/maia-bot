@@ -114,7 +114,7 @@ tal_rules2:            # rules fitted on 46,000 Tal positions: Tal model + Stock
 brilliant:             # Tal mode: always go for sacrifices that keep the position at least equal
   enabled: true
   chance: 1.0          # Tal show: always (real Tal took 43% of available sound sacrifices)
-  min_eval_cp: -30     # position after the sacrifice must be at least equal (Stockfish, -0.3 or better)
+  min_eval_cp: -60     # sacrifice whenever the position stays about equal (-0.6 or better): always played
   min_prob: 0.008      # brilliant hunting: also less obvious moves (Maia gives 0.8%+), still human-findable
   candidates: 16       # look at Maia's 16 most natural moves for sacrifices
   count_offers: true   # also pieces left en prise (chess.com counts those as brilliant too)
@@ -122,10 +122,11 @@ brilliant:             # Tal mode: always go for sacrifices that keep the positi
   depth: 12
   speculative: true    # also Tal's speculative sacrifices: objectively a bit worse, but they create an attack
   spec_min_eval_cp: -150   # may cost up to 1.5 pawns by Stockfish's count (never more)
-  spec_chance: 0.4     # Tal show: often (real Tal only 2%)
-  tal_motifs: true     # speculative sacrifices also allowed when they are one of Tal's own favourite motifs
+  spec_chance: 0.75    # Tal show: speculative attacking sacrifices most of the time
+  tal_motifs: true     # speculative sacrifices also allowed when they are a favourite motif
+  motifs_file: tal/brilliant-motifs.json  # Tal + 21 attacking players (Morphy, Keres, Nezhmetdinov, Spielmann, ...)
   max_eval_cp: 600     # Tal also sacrificed when clearly better (median +1.0 before his sacrifices)
-  min_now_cp: -200
+  min_now_cp: -300     # also sacrifice for counterplay when worse (Tal's practical chances)
 
 guard:                 # Stockfish blunder guard. Maia still chooses every move.
   enabled: true        # true = ON, false = OFF (applies mid-game within ~30 s)
