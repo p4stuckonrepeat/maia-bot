@@ -78,11 +78,11 @@ tal_rules2:            # rules fitted on 46,000 Tal positions: Tal model + Stock
   enabled: true        # (Tal was much more accurate than the model: 17 vs 29 cp average loss)
   file: tal/tal-rules2.json
   candidates: 10       # only Maia's 10 most natural moves are considered (stays human)
-  temperature: 0.5     # sampling between Tal-scored moves (lower = closer to Tal)
+  temperature: 0.65    # sampling between Tal-scored moves (higher = more human variety and mistakes)
   tal_traits_boost: 3.0  # Tal show: Tal traits (attack, no trades, complications, sacrifices) count 3x
   depth: 12
-  stockfish_weight: 0.08  # Stockfish barely counts: fewer engine top moves, Tal style decides (rapid)
-  lapse_chance: 0.15   # base: 15% of moves without Stockfish's precision (moments of inattention)
+  stockfish_weight: 0.04  # Stockfish hardly counts: Tal style and human instinct decide
+  lapse_chance: 0.22   # base: 22% of moves without Stockfish's precision (moments of inattention)
   human_curve:         # measured on 250 games of 2300-2600 players (Lichess Elite Database)
     enabled: true
     start_move: 20     # from move 20 on, instinct moves get more frequent (humans tire / positions get harder)
