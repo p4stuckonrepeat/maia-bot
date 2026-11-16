@@ -1,0 +1,23 @@
+name: "Tal: how often each version plays Tal's move"
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  match:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt git+https://github.com/CSSLab/maia3@1e13597c42d4858b7cfd7cfdae01e297263364b2
+      - name: Get study data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download tal-runs -p study.jsonl.gz
+      - name: Measure
+        run: python -u -m tools.tal_match
