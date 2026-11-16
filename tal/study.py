@@ -135,7 +135,25 @@ def extra_features(board, move, cp, best_cp, pv):
 
 
 # ---------------------------------------------------------------- collect
+def group_positions(games, per_player):
+    """Similar-players study: the same number of positions from every player (all used for statistics)."""
+    rng = random.Random(1)
+    by = {}
+    for i, g in enumerate(games):
+        by.setdefault(g.get("player", "?"), []).append(i)
+    out = []
+    for who in sorted(by):
+        s = [(gi, ply) for gi, ply in samples([games[i] for i in by[who]]) if ply >= MIN_PLY]
+        rng.shuffle(s)
+        sub = [games[i] for i in by[who]]
+        out += [("train", sub, gi, ply) for gi, ply in s[:per_player]]
+        log(f"{who}: {len(by[who])} games, {min(per_player, len(s))} positions")
+    return out
+
+
 def split_positions(games):
+    if os.environ.get("STUDY_PER_PLAYER"):
+        return group_positions(games, int(os.environ["STUDY_PER_PLAYER"]))
     rng = random.Random(1)                      # same split as tal/imitate.py and training
     rng.shuffle(games)
     n_hold = max(50, len(games) // 10)
@@ -204,7 +222,14 @@ def _collect_loop(items, eng, sf, out, t0):
         for (m, p, e), (cp, pv) in zip(cands, sfres):
             f = base_features(b, m, p, e) + extra_features(b, m, cp, best, pv)
             rows.append({"m": m.uci(), "p": round(p, 5), "cp": cp, "f": [round(x, 4) for x in f]})
+        tal_row = next(x for x in rows if x["m"] == tal.uci())
+        sac_kind = next((k for k in ("sound_sac", "spec_sac", "unsound_sac") if tal_row["f"][FEATURES.index(k)] > 0), None)
+        motif = None
+        if sac_kind:
+            from tal.motifs import motif_key
+            motif = motif_key(b, tal)
         out.write(json.dumps({"split": split, "ply": ply, "phase": game_phase(b), "best": best,
+                              "player": g.get("player", "Tal"), "sac": sac_kind, "motif": motif,
                               "tal": tal.uci(), "in_top": tal in [c[0] for c in cands[:len(top)]], "n_top": len(top),
                               "cands": rows}) + "\n")
         if n % 200 == 0 or n < 3:
@@ -256,8 +281,46 @@ def fit_eval(train, hold, names, ctx=False, epochs=500):
          for k, s in enumerate(["behind", "equal", "ahead"])}
 
 
+def group_report(rows):
+    import collections
+    F = {n: i for i, n in enumerate(FEATURES)}
+    by = collections.defaultdict(list)
+    for r in rows:
+        by[r["player"]].append(r)
+    L = [f"# Attacking players compared ({len(rows)} positions, Stockfish-checked)", "",
+         "Brilliant-type = a piece sacrifice within 0.3 pawns of the best natural move.", "",
+         "| Player | Positions | Avg loss (cp) | Blunders | Sacrifices / 100 moves | Brilliant-type / 100 | Speculative / 100 | Unsound / 100 | Took an available sound sac |",
+         "|---|---|---|---|---|---|---|---|---|"]
+    stats = []
+    for who, rs in by.items():
+        n = len(rs)
+        loss = [max(0, r["best"] - next(c for c in r["cands"] if c["m"] == r["tal"])["cp"]) for r in rs]
+        k = collections.Counter(r["sac"] for r in rs if r["sac"])
+        av = [r for r in rs if any(c["f"][F["sound_sac"]] for c in r["cands"][:r["n_top"]])]
+        took = sum(1 for r in av if r["sac"] == "sound_sac") / max(1, len(av))
+        stats.append((k["sound_sac"] / n, who, n, statistics.mean(min(x, 500) for x in loss),
+                      sum(x > 200 for x in loss) / n, sum(k.values()) / n, k["spec_sac"] / n, k["unsound_sac"] / n, took))
+    for br, who, n, al, bl, sac, spec, uns, took in sorted(stats, reverse=True):
+        L.append(f"| {who} | {n} | {al:.0f} | {bl:.1%} | {sac * 100:.2f} | {br * 100:.2f} | {spec * 100:.2f} | {uns * 100:.2f} | {took:.0%} |")
+    motifs = collections.Counter(r["motif"] for r in rows if r["sac"] == "sound_sac" and r["motif"])
+    spec_m = collections.Counter(r["motif"] for r in rows if r["sac"] == "spec_sac" and r["motif"])
+    L += ["", "## Most common brilliant-type sacrifices (all players)", ""] + \
+         [f"- {m}: {c}" for m, c in motifs.most_common(30)]
+    L += ["", "## Most common speculative sacrifices", ""] + [f"- {m}: {c}" for m, c in spec_m.most_common(15)]
+    json.dump({"favourite_sacrifices": {m: c for m, c in (motifs + spec_m).items() if c >= 3},
+               "players": {s[1]: {"brilliant_per_100": round(s[0] * 100, 2), "avg_loss": round(s[3], 1)} for s in stats}},
+              open("tal/attack-motifs.json", "w"), indent=1)
+    text = "\n".join(L)
+    open("tal/attack-report.md", "w").write(text + "\n")
+    print(text)
+    if os.environ.get("GITHUB_STEP_SUMMARY"):
+        open(os.environ["GITHUB_STEP_SUMMARY"], "a").write(text + "\n")
+
+
 def report():
     rows = [json.loads(l) for f in sorted(glob.glob("study-shard-*.jsonl")) for l in open(f)]
+    if any(r.get("player", "Tal") != "Tal" for r in rows):
+        return group_report(rows)
     train = [r for r in rows if r["split"] == "train"]
     hold = [r for r in rows if r["split"] == "hold"]
     F = {n: i for i, n in enumerate(FEATURES)}

@@ -13,6 +13,12 @@ on:
       save:
         description: "Commit report + rules to the repo"
         default: "true"
+      player:
+        description: "tal, or group:Name1,Name2 (pgnmentor names)"
+        default: "tal"
+      per_player:
+        description: "Group study: positions per player (empty for Tal)"
+        default: ""
       debug:
         description: "Seconds until a stack dump (test runs), empty = off"
         default: ""
@@ -53,7 +59,8 @@ jobs:
           STUDY_TRAIN: ${{ inputs.train }}
           STUDY_HOLD: ${{ inputs.hold }}
           STUDY_DEPTH: ${{ inputs.depth }}
-          PLAYER: tal
+          PLAYER: ${{ inputs.player }}
+          STUDY_PER_PLAYER: ${{ inputs.per_player }}
           STUDY_DEBUG: ${{ inputs.debug }}
         run: python -u -m tal.study
       - uses: actions/upload-artifact@v4
@@ -81,15 +88,17 @@ jobs:
       - name: Report
         env:
           STUDY_MODE: report
+          PLAYER: ${{ inputs.player }}
         run: python -u -m tal.study
       - name: Save to the repo
         if: inputs.save == 'true'
         run: |
-          cp tal/study-report.md tal/tal-rules2.json /tmp/
+          mkdir -p /tmp/out
+          for f in study-report.md tal-rules2.json attack-report.md attack-motifs.json; do [ -f tal/$f ] && cp tal/$f /tmp/out/ || true; done
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin ${{ github.ref_name }} && git reset --hard origin/${{ github.ref_name }}
-          cp /tmp/study-report.md /tmp/tal-rules2.json tal/
-          git add tal/study-report.md tal/tal-rules2.json
+          cp /tmp/out/* tal/
+          git add tal/
           git commit -m "Tal study: report and fitted rules" || echo "no changes"
           git push

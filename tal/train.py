@@ -114,15 +114,15 @@ def tal_games(text):
         w, b = g.headers.get("White", ""), g.headers.get("Black", "")
         if PLAYER.startswith("group:"):
             names = PLAYER.split(":", 1)[1].split(",")
-            sides = [c for c, nm in ((chess.WHITE, w), (chess.BLACK, b))
+            sides = [(c, next(x for x in names if re.match(rf"^{x}\b", nm))) for c, nm in ((chess.WHITE, w), (chess.BLACK, b))
                      if any(re.match(rf"^{x}\b", nm) for x in names)]
             if not sides or g.headers.get("Variant") or g.headers.get("SetUp") == "1":
                 continue
             moves = [m.uci() for m in g.mainline_moves()]
             if len(moves) < 10:
                 continue
-            for c in sides:
-                games.append({"moves": moves, "tal": c, "result": g.headers.get("Result", "*")})
+            for c, who in sides:
+                games.append({"moves": moves, "tal": c, "result": g.headers.get("Result", "*"), "player": who})
             if MAX_GAMES and len(games) >= MAX_GAMES:
                 break
             continue
