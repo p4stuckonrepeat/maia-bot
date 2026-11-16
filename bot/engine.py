@@ -379,16 +379,26 @@ class Guard:
             now = self.score(board, color, depth)
             if now > float(bcfg.get("max_eval_cp", 300)) or now < float(bcfg.get("min_now_cp", -200)):
                 return move, None    # already winning (no need to show off) or already lost
-            sacs = []
+            sacs, scores = [], {}
             for c in cands:
                 sc, pv = self.after_pv(board, c["move"], color, depth)
-                if not self.sacrifice(board, c["move"], pv):
-                    continue
-                if sc >= float(bcfg.get("min_eval_cp", -30)):
-                    sacs.append((c, sc, "sound"))
-                elif bcfg.get("speculative") and sc >= float(bcfg.get("spec_min_eval_cp", -150)) \
-                        and (self.attacking(board, c["move"]) or self.tal_motif(board, c["move"], bcfg)):
-                    sacs.append((c, sc, "speculative"))
+                scores[c["move"]] = sc
+                if self.sacrifice(board, c["move"], pv):
+                    sacs.append((c, sc, None))
+            best_all = max(scores.values()) if scores else 0
+            max_cost = float(bcfg.get("max_cost_cp", 10000))   # never more than this below the best natural move
+            free_cost = float(bcfg.get("spec_free_cost_cp", -1))
+            graded = []
+            for c, sc, _ in sacs:
+                cost = best_all - sc
+                if cost > max_cost:
+                    continue                                    # e.g. never give up a winning promotion for a show sacrifice
+                if sc >= float(bcfg.get("min_eval_cp", -30)) and cost <= float(bcfg.get("sound_max_cost_cp", 10000)):
+                    graded.append((c, sc, "sound"))
+                elif bcfg.get("speculative") and sc >= float(bcfg.get("spec_min_eval_cp", -150)) and (
+                        cost <= free_cost or self.attacking(board, c["move"]) or self.tal_motif(board, c["move"], bcfg)):
+                    graded.append((c, sc, "speculative"))      # Tal takes over: a little worse is fine
+            sacs = graded
         sound = [x for x in sacs if x[2] == "sound"]
         near = float(bcfg.get("prefer_within_cp", 0))
         if near and sound:

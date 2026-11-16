@@ -122,7 +122,10 @@ brilliant:             # Tal mode: always go for sacrifices that keep the positi
   depth: 12
   speculative: true    # also Tal's speculative sacrifices: objectively a bit worse, but they create an attack
   spec_min_eval_cp: -150   # may cost up to 1.5 pawns by Stockfish's count (never more)
-  spec_chance: 0.75    # Tal show: speculative attacking sacrifices most of the time
+  spec_chance: 1.0     # Tal takes over: always go for a speculative sacrifice when one is there
+  max_cost_cp: 200     # a sacrifice may cost at most 2 pawns compared with the best natural move (never throw a win away)
+  sound_max_cost_cp: 150 # "about equal" sacrifices count as sound only if they cost at most 1.5 pawns vs the best move
+  spec_free_cost_cp: 100 # speculative sacrifices costing at most 1 pawn are allowed even without a direct king attack
   tal_motifs: true     # speculative sacrifices also allowed when they are a favourite motif
   motifs_file: tal/brilliant-motifs.json  # Tal + 21 attacking players (Morphy, Keres, Nezhmetdinov, Spielmann, ...)
   max_eval_cp: 600     # Tal also sacrificed when clearly better (median +1.0 before his sacrifices)
