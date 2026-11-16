@@ -84,13 +84,13 @@ tal_rules2:            # rules fitted on 46,000 Tal positions: Tal model + Stock
 
 brilliant:             # Tal mode: always go for sacrifices that keep the position at least equal
   enabled: true
-  chance: 0.45         # Tal played an available sound sacrifice 43% of the time (study of 46,000 positions)
+  chance: 1.0          # Tal show: always (real Tal took 43% of available sound sacrifices)
   min_eval_cp: -30     # position after the sacrifice must be at least equal (Stockfish, -0.3 or better)
   min_prob: 0.02       # only moves Maia gives 2%+ (a human could find them)
   depth: 12
   speculative: true    # also Tal's speculative sacrifices: objectively a bit worse, but they create an attack
   spec_min_eval_cp: -150   # may cost up to 1.5 pawns by Stockfish's count (never more)
-  spec_chance: 0.03    # Tal took an available speculative sacrifice only 2% of the time
+  spec_chance: 0.4     # Tal show: often (real Tal only 2%)
   max_eval_cp: 600     # Tal also sacrificed when clearly better (median +1.0 before his sacrifices)
   min_now_cp: -200
 
