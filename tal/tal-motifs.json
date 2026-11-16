@@ -1,0 +1,18 @@
+{
+ "favourite_sacrifices": {
+  "knight to d5": 8,
+  "knight takes e5": 7,
+  "rook takes g7 +": 7,
+  "knight takes f7": 7,
+  "bishop takes f7 +": 5,
+  "rook takes f4": 5,
+  "knight to f5": 5,
+  "rook takes f6": 4,
+  "rook takes c6": 4,
+  "rook takes f7": 4,
+  "rook takes e6": 4,
+  "knight to e6": 3,
+  "rook takes e7": 3
+ },
+ "positions": 46000
+}
