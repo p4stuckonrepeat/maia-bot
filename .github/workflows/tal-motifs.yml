@@ -1,0 +1,41 @@
+name: "Tal: tactics and sacrifice motifs from his games"
+on:
+  workflow_dispatch:
+    inputs:
+      min_count:
+        description: "A sacrifice motif must appear at least this often"
+        default: "3"
+permissions:
+  contents: write
+jobs:
+  patterns:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt git+https://github.com/CSSLab/maia3@1e13597c42d4858b7cfd7cfdae01e297263364b2
+      - name: Get study data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download tal-runs -p study.jsonl.gz
+      - name: Learn patterns
+        env:
+          MOTIF_MIN: ${{ inputs.min_count }}
+          PLAYER: tal
+        run: python -u -m tal.motifs
+      - name: Save to the repo
+        run: |
+          cp tal/tal-motifs.json tal/motifs-report.md /tmp/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin ${{ github.ref_name }} && git reset --hard origin/${{ github.ref_name }}
+          cp /tmp/tal-motifs.json /tmp/motifs-report.md tal/
+          git add tal/tal-motifs.json tal/motifs-report.md
+          git commit -m "Tal motifs: report and favourite sacrifices" || echo "no changes"
+          git push

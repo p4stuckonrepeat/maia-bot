@@ -255,6 +255,18 @@ class Guard:
             self._rules2 = _json.load(open(rcfg.get("file", "tal/tal-rules2.json")))
         r = self._rules2
         names, w = r["features"], r["weights"]
+        pat = {}
+        if rcfg.get("patterns"):
+            import os as _os
+            from tal.patterns import pattern_keys
+            from bot.style import phase as _phase
+            pf = rcfg.get("patterns_file", "tal/tal-patterns.json")
+            if _os.path.exists(pf):
+                if not hasattr(self, "_patterns"):
+                    self._patterns = _json.load(open(pf))["weights"]
+                pat = self._patterns
+                ph = _phase(board)
+                ph = ph if ph in ("opening", "middlegame", "endgame") else "middlegame"
         color, depth = board.turn, int(rcfg.get("depth", 12))
         with self.lock:
             res = [self.after_pv(board, c["move"], color, depth) for c in cands]
@@ -266,12 +278,27 @@ class Guard:
                 extra_features(board, c["move"], cp, best, pv)
             f = dict(zip(FEATURES, vals))
             sfw = float(rcfg.get("stockfish_weight", 1.0))   # <1 = Stockfish counts less -> more human errors
-            scored.append((c["move"], sum(w[n] * f[n] * (sfw if n == "sf_loss" else 1.0) for n in names), cp))
+            logit = sum(w[n] * f[n] * (sfw if n == "sf_loss" else 1.0) for n in names)
+            if pat:   # Tal's move patterns (piece to square, captures, checks per phase), learned from his games
+                logit += sum(pat.get(k, 0.0) for k in pattern_keys(board, c["move"], ph))
+            scored.append((c["move"], logit, cp))
         t = float(rcfg.get("temperature", 0.75))
         mx = max(l for _, l, _ in scored)
         ps = [_math.exp((l - mx) / t) for _, l, _ in scored]
         pick = random.choices(scored, weights=ps)[0]
         return pick[0], scored
+
+    def tal_motif(self, board, move, bcfg):
+        """One of Tal's own favourite sacrifices (piece + square), learned from his games (tal/motifs.py)."""
+        import json as _json
+        import os as _os
+        f = bcfg.get("motifs_file", "tal/tal-motifs.json")
+        if not bcfg.get("tal_motifs") or not _os.path.exists(f):
+            return False
+        if not hasattr(self, "_motifs"):
+            self._motifs = _json.load(open(f))["favourite_sacrifices"]
+        from tal.motifs import motif_key
+        return motif_key(board, move) in self._motifs
 
     @staticmethod
     def attacking(board, move):
@@ -312,7 +339,7 @@ class Guard:
                 if sc >= float(bcfg.get("min_eval_cp", -30)):
                     sacs.append((c, sc, "sound"))
                 elif bcfg.get("speculative") and sc >= float(bcfg.get("spec_min_eval_cp", -150)) \
-                        and self.attacking(board, c["move"]):
+                        and (self.attacking(board, c["move"]) or self.tal_motif(board, c["move"], bcfg)):
                     sacs.append((c, sc, "speculative"))
         sound = [x for x in sacs if x[2] == "sound"]
         spec = [x for x in sacs if x[2] == "speculative"]
