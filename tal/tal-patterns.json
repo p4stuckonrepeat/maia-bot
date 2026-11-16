@@ -1,0 +1,7 @@
+{
+ "accuracy": 0.6233333349227905,
+ "baseline": 0.6233333349227905,
+ "regularisation": 0.0,
+ "min_count": 40,
+ "weights": {}
+}
