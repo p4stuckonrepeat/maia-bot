@@ -1,0 +1,112 @@
+name: "Accuracy curve: bot vs strong humans"
+on:
+  workflow_dispatch:
+    inputs:
+      code_ref:
+        description: "Bot version (branch) to test"
+        default: "live-tal-v1"
+      model_release:
+        description: "Release with the Tal model"
+        default: "tal-live-v1"
+      bot_games:
+        description: "Bot games per machine (3 machines)"
+        default: "6"
+      human_games:
+        default: "250"
+      depth:
+        default: "11"
+permissions:
+  contents: read
+jobs:
+  bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.code_ref }}
+      - uses: actions/checkout@v4
+        with:
+          path: _main
+      - run: cp _main/tools/curve.py tools/curve.py
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: maia3-79m
+      - name: Install
+        run: |
+          sudo apt-get update && sudo apt-get install -y stockfish
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt git+https://github.com/CSSLab/maia3@1e13597c42d4858b7cfd7cfdae01e297263364b2
+          maia3-cache --model maia3-79m
+      - name: Get model
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "${{ inputs.model_release }}" -p tal-79m.pt
+      - name: Bot games + analysis
+        env:
+          CURVE_MODE: bot
+          CURVE_SHARD: ${{ matrix.shard }}
+          CURVE_GAMES: ${{ inputs.bot_games }}
+          CURVE_DEPTH: ${{ inputs.depth }}
+          BOT_CONFIG: config-tal.yml
+        run: python -u -m tools.curve
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: curve-bot-${{ matrix.shard }}
+          path: curve-bot-*
+  human:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          sudo apt-get update && sudo apt-get install -y stockfish
+          pip install -r requirements.txt
+      - name: Human games + analysis
+        env:
+          CURVE_MODE: human
+          CURVE_GAMES: ${{ inputs.human_games }}
+          CURVE_DEPTH: ${{ inputs.depth }}
+        run: python -u -m tools.curve
+      - uses: actions/upload-artifact@v4
+        with:
+          name: curve-human
+          path: curve-human.json
+  compare:
+    needs: [bot, human]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: curve-*
+          merge-multiple: true
+      - name: Compare
+        env:
+          CURVE_MODE: compare
+        run: python -u -m tools.curve
+      - uses: actions/upload-artifact@v4
+        with:
+          name: curve-report
+          path: |
+            curve-report.md
+            curve-summary.json
+            curve-bot-*.pgn
