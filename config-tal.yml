@@ -100,7 +100,10 @@ brilliant:             # Tal mode: always go for sacrifices that keep the positi
   enabled: true
   chance: 1.0          # Tal show: always (real Tal took 43% of available sound sacrifices)
   min_eval_cp: -30     # position after the sacrifice must be at least equal (Stockfish, -0.3 or better)
-  min_prob: 0.02       # only moves Maia gives 2%+ (a human could find them)
+  min_prob: 0.008      # brilliant hunting: also less obvious moves (Maia gives 0.8%+), still human-findable
+  candidates: 16       # look at Maia's 16 most natural moves for sacrifices
+  count_offers: true   # also pieces left en prise (chess.com counts those as brilliant too)
+  prefer_within_cp: 50 # prefer sacrifices within 0.5 pawns of the best move (that's what chess.com marks brilliant)
   depth: 12
   speculative: true    # also Tal's speculative sacrifices: objectively a bit worse, but they create an attack
   spec_min_eval_cp: -150   # may cost up to 1.5 pawns by Stockfish's count (never more)
