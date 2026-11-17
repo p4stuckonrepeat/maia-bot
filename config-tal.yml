@@ -132,6 +132,14 @@ brilliant:             # Tal mode: always go for sacrifices that keep the positi
   max_eval_cp: 1500    # brilliants also when already winning (chess.com marks those too)
   min_now_cp: -400     # also sacrifice for counterplay when worse (Tal's practical chances)
 
+human_check:           # v5.1: blunder check like a strong human, WITHOUT Stockfish (Maia's own feel)
+  enabled: true
+  replies: 6           # look at the opponent's 6 most natural replies to the chosen move
+  ok_above: 0.35       # if our winning chances stay above 35% against all of them, play the move
+  alternatives: 4      # otherwise compare with Maia's 4 most natural other moves
+  min_gain: 0.2        # switch only if another move is clearly safer (+20% winning chances)
+  min_clock_seconds: 20
+
 guard:                 # Stockfish blunder guard. Maia still chooses every move.
   enabled: false        # true = ON, false = OFF (applies mid-game within ~30 s)
   playable_cp: -150    # only check moves when the position is at least this good for the bot

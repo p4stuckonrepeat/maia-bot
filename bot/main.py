@@ -300,12 +300,59 @@ class Bot:
             move, n = self.guard.assist(board, move, top, acfg)
             if n:
                 notes.append(n)
+        hcfg = self.cfg.get("human_check", {})
+        if hcfg.get("enabled") and (clock is None or clock > hcfg.get("min_clock_seconds", 20) * 1000):
+            move, n = self.human_check(board, move, mcfg, opp_rating, hcfg)
+            if n:
+                notes.append(n)
         if gcfg.get("enabled"):
             move, n = self.guard.check(board, move, gcfg,
                                        lambda: self.maia.choose(board, mcfg, opp_rating, candidates=8)[1])
             if n:
                 notes.append(n)
         return move, ("; ".join(notes) or None), None, top_prob
+
+    def _worst_case(self, board, move, mcfg, opp_rating, k):
+        """Our expected score if the opponent finds their best natural reply (Maia's own feel, no Stockfish)."""
+        board.push(move)
+        try:
+            if board.is_checkmate():
+                return 1.0
+            if board.is_game_over(claim_draw=True):
+                return 0.5
+            replies = self.maia.choose(board, mcfg, opp_rating, candidates=k)[1]
+            if not replies:
+                return 0.5
+            worst = 1.0
+            for r in replies:
+                board.push(r["move"])
+                mate = board.is_checkmate()
+                board.pop()
+                w = r.get("wdl", (500, 0, 500))
+                theirs = 1.0 if mate else (w[0] + 0.5 * w[1]) / 1000
+                worst = min(worst, 1.0 - theirs)
+            return worst
+        finally:
+            board.pop()
+
+    def human_check(self, board, move, mcfg, opp_rating, hcfg):
+        """Blunder check like a strong human, without an engine: look at the opponent's most natural replies;
+        if the chosen move collapses against one of them while another natural move holds, play that instead."""
+        k = int(hcfg.get("replies", 6))
+        mine = self._worst_case(board, move, mcfg, opp_rating, k)
+        if mine >= float(hcfg.get("ok_above", 0.35)):
+            return move, None
+        cands = [c for c in self.maia.choose(board, mcfg, opp_rating, candidates=int(hcfg.get("alternatives", 4)))[1]
+                 if c["move"] != move]
+        best, best_val = None, mine
+        for c in cands:
+            v = self._worst_case(board, c["move"], mcfg, opp_rating, k)
+            if v > best_val:
+                best, best_val = c["move"], v
+        if best is not None and best_val - mine >= float(hcfg.get("min_gain", 0.2)):
+            return best, (f"blunder check: {board.san(move)} ({mine:.0%} after their best reply) -> "
+                          f"{board.san(best)} ({best_val:.0%})")
+        return move, None
 
     def finish(self, gid, state, color, opp, opp_rating, vetoes=0, opening=None, book_moves=0):
         winner = state.get("winner")
