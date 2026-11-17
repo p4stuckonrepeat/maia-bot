@@ -385,7 +385,7 @@ class Bot:
                     move = natural       # instinct move (human accuracy curve)
                 if move != natural:
                     notes.append(f"tal rules: {board.san(move)} instead of {board.san(natural)}")
-        bcfg = self.cfg.get("brilliant", {})
+        bcfg = self._adapt(self.cfg.get("brilliant", {}), "brilliant", level)
         if bcfg.get("enabled") and (clock is None or clock > bcfg.get("min_clock_seconds", 60) * 1000):
             btop = top
             if len(top) < int(bcfg.get("candidates", 10)):
