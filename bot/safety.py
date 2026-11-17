@@ -60,6 +60,12 @@ def danger_after(board, color, max_moves=60):
                 return True
             if quiet_pawn and hit and any(s not in hit for s in loose_now):
                 return True
+            # a pawn attacks one piece while another piece is only just held (defenders <= attackers)
+            if quiet_pawn and hit and any(
+                    s not in hit and p.color == color and p.piece_type not in (chess.PAWN, chess.KING)
+                    and board.attackers(not color, s) and len(board.attackers(color, s)) <= len(board.attackers(not color, s))
+                    for s, p in board.piece_map().items()):
+                return True
             if quiet_pawn and hit and any(VAL[board.piece_type_at(s)] > 1 for s in hit) and len(loose_now) >= 2:
                 return True
         finally:
