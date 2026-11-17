@@ -115,11 +115,11 @@ brilliant:             # Tal mode: always go for sacrifices that keep the positi
   enabled: true
   chance: 1.0          # Tal show: always (real Tal took 43% of available sound sacrifices)
   min_eval_cp: -60     # sacrifice whenever the position stays about equal (-0.6 or better): always played
-  min_prob: 0.006      # brilliant hunting: also less obvious moves (Maia gives 0.6%+), still human-findable
-  candidates: 20       # look at Maia's 20 most natural moves for sacrifices
+  min_prob: 0.003      # brilliant hunting: also hidden moves (Maia gives 0.3%+)
+  candidates: 30       # look at Maia's 30 most natural moves for sacrifices
   count_offers: true   # also pieces left en prise (chess.com counts those as brilliant too)
   prefer_within_cp: 50 # prefer sacrifices within 0.5 pawns of the best move (that's what chess.com marks brilliant)
-  depth: 12
+  depth: 10           # a bit shallower so checking 30 moves stays fast
   speculative: true    # also Tal's speculative sacrifices: objectively a bit worse, but they create an attack
   spec_min_eval_cp: -250   # Tal mode: position after a speculative sacrifice may be up to -2.5
   spec_chance: 1.0     # Tal takes over: always go for a speculative sacrifice when one is there
@@ -128,8 +128,8 @@ brilliant:             # Tal mode: always go for sacrifices that keep the positi
   spec_free_cost_cp: 150 # speculative sacrifices costing at most 1.5 pawns are allowed even without a direct king attack
   tal_motifs: true     # speculative sacrifices also allowed when they are a favourite motif
   motifs_file: tal/brilliant-motifs.json  # Tal + 21 attacking players (Morphy, Keres, Nezhmetdinov, Spielmann, ...)
-  max_eval_cp: 600     # Tal also sacrificed when clearly better (median +1.0 before his sacrifices)
-  min_now_cp: -300     # also sacrifice for counterplay when worse (Tal's practical chances)
+  max_eval_cp: 1500    # brilliants also when already winning (chess.com marks those too)
+  min_now_cp: -400     # also sacrifice for counterplay when worse (Tal's practical chances)
 
 guard:                 # Stockfish blunder guard. Maia still chooses every move.
   enabled: true        # true = ON, false = OFF (applies mid-game within ~30 s)
