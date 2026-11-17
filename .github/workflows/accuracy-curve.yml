@@ -8,8 +8,11 @@ on:
       model_release:
         description: "Release with the Tal model"
         default: "tal-live-v1"
+      model_asset:
+        description: "Model file name in that release (saved as tal-79m.pt)"
+        default: "tal-79m.pt"
       bot_games:
-        description: "Bot games per machine (3 machines)"
+        description: "Bot games per machine (6 machines)"
         default: "6"
       human_games:
         default: "250"
@@ -24,7 +27,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2]
+        shard: [0, 1, 2, 3, 4, 5]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -49,7 +52,9 @@ jobs:
       - name: Get model
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release download "${{ inputs.model_release }}" -p tal-79m.pt
+        run: |
+          gh release download "${{ inputs.model_release }}" -p "${{ inputs.model_asset }}"
+          [ "${{ inputs.model_asset }}" = tal-79m.pt ] || mv "${{ inputs.model_asset }}" tal-79m.pt
       - name: Bot games + analysis
         env:
           CURVE_MODE: bot

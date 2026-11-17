@@ -24,6 +24,27 @@ GAMES = int(os.environ.get("CURVE_GAMES", "8"))
 BUCKETS = [(1, 10), (11, 20), (21, 30), (31, 40), (41, 999)]
 
 
+def win_pct(cp):
+    """Lichess' public win-percentage formula."""
+    import math
+    cp = max(-1000, min(1000, cp))
+    return 50 + 50 * (2 / (1 + math.exp(-0.00368208 * cp)) - 1)
+
+
+def move_accuracy(wb, wa):
+    """Lichess' public per-move accuracy formula (0-100)."""
+    import math
+    return max(0.0, min(100.0, 103.1668 * math.exp(-0.04354 * max(0.0, wb - wa)) - 3.1669))
+
+
+def game_accuracies(rows):
+    by = {}
+    for r in rows:
+        if "game" in r:
+            by.setdefault(r["game"], []).append(move_accuracy(r["wb"], r["wa"]))
+    return [statistics.mean(v) for v in by.values() if len(v) >= 10]
+
+
 def analyse(games, out_name):
     """games: list of (chess.pgn.Game, set of colors to track)."""
     sf = chess.engine.SimpleEngine.popen_uci(os.environ.get("STOCKFISH", "/usr/games/stockfish"))
@@ -50,7 +71,8 @@ def analyse(games, out_name):
                     before, best = evals[i]
                     after = -evals[i + 1][0]
                     if abs(before) <= 1000:
-                        rows.append({"move": b.fullmove_number, "loss": max(0, min(500, before - after)),
+                        rows.append({"game": f"{out_name}:{gi}", "wb": win_pct(before), "wa": win_pct(after),
+                                     "move": b.fullmove_number, "loss": max(0, min(500, before - after)),
                                      "top": m == best, "eval": before,
                                      "sharp": sum(1 for x in b.legal_moves if b.is_capture(x)) >= 3})
                 b.push(m)
@@ -83,7 +105,9 @@ def bot_games():
         print(f"game {i + 1}: {res}", flush=True)
         out.append((g, {chess.WHITE if white else chess.BLACK}))
     guard.close()
-    open(f"curve-bot-{shard}.pgn", "w").write("\n\n".join(str(g) for g, _ in out) + "\n")
+    text = "\n\n".join(str(g) for g, _ in out) + "\n"
+    open(f"curve-bot-{shard}.pgn", "w").write(text)
+    print("=====PGN START=====\n" + text + "=====PGN END=====", flush=True)
     analyse(out, f"curve-bot-{shard}.json")
 
 
@@ -146,6 +170,17 @@ def compare():
             out[label] = {"human": h, "bot": b}
             L.append(f"| {label} | {h[0]:.0f} | {b[0]:.0f} | {h[1]:.0%} | {b[1]:.0%} | {h[2]:.1%} | {b[2]:.1%} | "
                      f"{h[3]:.1%} | {b[3]:.1%} | {h[4]}/{b[4]} |")
+    ga_h, ga_b = game_accuracies(sets.get("human", [])), game_accuracies(sets.get("bot", []))
+    if ga_h and ga_b:
+        q = lambda xs, p: sorted(xs)[min(len(xs) - 1, int(p * len(xs)))]
+        L += ["", "## Game accuracy (Lichess formula, per player per game)", "",
+              "| | Humans 2300-2600 | Bot |", "|---|---|---|",
+              f"| average | {statistics.mean(ga_h):.1f}% | {statistics.mean(ga_b):.1f}% |",
+              f"| median | {q(ga_h, .5):.1f}% | {q(ga_b, .5):.1f}% |",
+              f"| lowest 10% | {q(ga_h, .1):.1f}% | {q(ga_b, .1):.1f}% |",
+              f"| top 10% | {q(ga_h, .9):.1f}% | {q(ga_b, .9):.1f}% |",
+              f"| games | {len(ga_h)} | {len(ga_b)} |"]
+        out["game_accuracy"] = {"human": statistics.mean(ga_h), "bot": statistics.mean(ga_b)}
     json.dump(out, open("curve-summary.json", "w"), indent=1)
     text = "\n".join(L)
     open("curve-report.md", "w").write(text + "\n")
