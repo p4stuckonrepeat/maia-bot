@@ -79,11 +79,11 @@ tal_rules2:            # rules fitted on 46,000 Tal positions (v5: Tal traits + 
   no_stockfish: true   # v5: Stockfish completely off        # (Tal was much more accurate than the model: 17 vs 29 cp average loss)
   file: tal/tal-rules2.json
   candidates: 10       # only Maia's 10 most natural moves are considered (stays human)
-  temperature: 0.5     # sampling between Tal-scored moves (lower = closer to Tal)
-  tal_traits_boost: 1.3  # without Stockfish: Tal traits 1.3x (3x made it play moves Maia calls nonsense)
+  temperature: 0.7     # sampling between Tal-scored moves (higher = more human variety and mistakes)
+  tal_traits_boost: 1.7  # Tal style: attack, complications, sacrifices count 1.7x
   depth: 12
-  stockfish_weight: 0.6  # v5.x: weight of Maia's own position judgement (no Stockfish), keeps moves sound
-  lapse_chance: 0.15   # base: 15% of moves without Stockfish's precision (moments of inattention)
+  stockfish_weight: 0.4  # v5.x: weight of Maia's own position judgement (lower = wilder, more mistakes)
+  lapse_chance: 0.22   # base: 22% of moves without the quality check (human inattention)
   human_curve:         # measured on 250 games of 2300-2600 players (Lichess Elite Database)
     enabled: true
     start_move: 20     # from move 20 on, instinct moves get more frequent (humans tire / positions get harder)
@@ -140,7 +140,7 @@ human_check:           # v5.1: blunder check like a strong human, WITHOUT Stockf
   min_gain: 0.2        # switch only if another move is clearly safer (+20% winning chances)
   min_clock_seconds: 20
   static_first: true   # v5.2: instant "loose pieces" scan; only if it smells a tactic, look 2 moves deep (Maia)
-  deep_ok_above: 0.35
+  deep_ok_above: 0.25  # blunder check only stops really bad blunders (more human mistakes get through)
 
 maia_sacrifices:       # v5.2: Tal's sacrifices WITHOUT Stockfish, judged by Maia's own feel
   enabled: true
@@ -149,9 +149,9 @@ maia_sacrifices:       # v5.2: Tal's sacrifices WITHOUT Stockfish, judged by Mai
   max_checks: 4        # check at most 4 sacrifices per move (keeps it fast)
   replies: 5
   sound_above: 0.52    # after the opponent's best natural reply Maia still gives us 52%+: play it (always)
-  spec_above: 0.46     # 46-52%: speculative, Tal-style
+  spec_above: 0.42     # 42-52%: speculative, Tal-style
   chance: 1.0
-  spec_chance: 0.35
+  spec_chance: 0.5
   min_clock_seconds: 30
 
 guard:                 # Stockfish blunder guard. Maia still chooses every move.
