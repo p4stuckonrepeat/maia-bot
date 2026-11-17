@@ -133,6 +133,15 @@ def tal_games(text):
             is_w, is_b = bool(re.match(r"^Tal\b", w)), bool(re.match(r"^Tal\b", b))
         if is_w == is_b or g.headers.get("Variant") or g.headers.get("SetUp") == "1":
             continue
+        years = os.environ.get("TAL_YEARS")          # e.g. 1949-1962 = young, wild Tal only
+        if years:
+            lo, hi = (int(x) for x in years.split("-"))
+            try:
+                y = int(g.headers.get("Date", "?")[:4])
+            except ValueError:
+                continue
+            if not lo <= y <= hi:
+                continue
         moves = list(g.mainline_moves())
         if len(moves) < 10:
             continue

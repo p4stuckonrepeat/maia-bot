@@ -1,0 +1,40 @@
+name: "Tal: young Tal training on RunPod"
+on:
+  workflow_dispatch:
+    inputs:
+      years:
+        default: "1949-1962"
+permissions:
+  contents: write
+concurrency: runpod-young
+env:
+  RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+  GH_TOKEN: ${{ github.token }}
+  GH_REPO: ${{ github.repository }}
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+      - name: Start GPU
+        run: echo "POD=$(python3 tools/runpod.py start young PLAN_MODE=young TAL_YEARS=${{ inputs.years }})" >> "$GITHUB_ENV"
+      - name: Wait
+        run: python3 tools/runpod.py wait "$POD" tal-runs young-info.json 100
+      - name: Shut the GPU down (always)
+        if: always()
+        run: '[ -n "$POD" ] && python3 tools/runpod.py stop "$POD" || echo "no pod"'
+      - name: Result
+        run: |
+          gh release download tal-runs -p young-info.json --clobber
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json
+          d = json.load(open("young-info.json"))
+          if "error" in d:
+              print("## Young Tal training failed\n```\n" + d["error"][-1500:] + "\n```"); raise SystemExit(1)
+          print(f"## Young Tal training (GPU: {d.get('gpu')})\n| Variant | Before (current Tal model) | After |\n|---|---|---|")
+          for k, v in d.items():
+              if isinstance(v, dict) and "after" in v:
+                  print(f"| {k} | {v['before']:.1%} | {v['after']:.1%} |")
+          PY

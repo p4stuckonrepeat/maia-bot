@@ -60,6 +60,20 @@ def main():
         json.dump(out, open("pretrain-info.json", "w"), indent=1)
         upload(TAG, "pretrain-info.json", "pretrain-info.json")   # done signal
         return
+    if mode == "young":     # young, wild Tal (1949-1962): continue from the current Tal model
+        out = {"gpu": gpu}
+        try:
+            download("tal-79m.pt", "tal-79m.pt", tag="tal-model")
+            for name, blocks, lr, epochs in (("young_b4", "4", "1e-5", "6"), ("young_b8", "8", "5e-6", "5")):
+                out[name] = run({"PLAYER": "tal", "PLAYER_MAX_GAMES": "0", "TAL_YEARS": os.environ.get("TAL_YEARS", "1949-1962"),
+                                 "TAL_EPOCHS": epochs, "TAL_TRAIN_BLOCKS": blocks, "TAL_LR": lr, "TAL_MINUTES": "20",
+                                 "TAL_OUT": f"{name}.pt", "TAL_RESUME": "tal-79m.pt", "TAL_EVAL": "2000"})
+                upload(TAG, f"{name}.pt", f"{name}.pt")
+        except Exception as e:
+            out["error"] = str(e)
+        json.dump(out, open("young-info.json", "w"), indent=1)
+        upload(TAG, "young-info.json", "young-info.json")   # done signal
+        return
     if mode == "antiblunder":
         out = {"gpu": gpu}
         try:
