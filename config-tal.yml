@@ -80,9 +80,9 @@ tal_rules2:            # rules fitted on 46,000 Tal positions (v5: Tal traits + 
   file: tal/tal-rules2.json
   candidates: 10       # only Maia's 10 most natural moves are considered (stays human)
   temperature: 0.5     # sampling between Tal-scored moves (lower = closer to Tal)
-  tal_traits_boost: 3.0  # Tal show: Tal traits (attack, no trades, complications, sacrifices) count 3x
+  tal_traits_boost: 1.3  # without Stockfish: Tal traits 1.3x (3x made it play moves Maia calls nonsense)
   depth: 12
-  stockfish_weight: 0.08  # Stockfish barely counts: fewer engine top moves, Tal style decides (rapid)
+  stockfish_weight: 0.6  # v5.x: weight of Maia's own position judgement (no Stockfish), keeps moves sound
   lapse_chance: 0.15   # base: 15% of moves without Stockfish's precision (moments of inattention)
   human_curve:         # measured on 250 games of 2300-2600 players (Lichess Elite Database)
     enabled: true
@@ -101,16 +101,16 @@ tal_rules2:            # rules fitted on 46,000 Tal positions (v5: Tal traits + 
   min_clock_seconds: 60  # under 1 minute left: plays on instinct only (more time-pressure mistakes)
   complicate_when_worse:   # Tal's practical chances: when worse, make it messy instead of defending passively
     enabled: true
-    below_cp: 200        # Tal show: seek complications unless clearly winning (+2.0 or more)
+    below_cp: 100        # seek complications unless clearly better (+1.0 or more)
     stockfish_factor: 0.6  # Stockfish's verdict counts less then (accepts slightly weaker but trickier moves)
     max_extra_loss_cp: 150 # but the bonus only goes to moves at most 1.5 pawns below the best natural move
     bonus:
-      complexity: 1.0    # positions with many captures / tension
-      threat: 0.8        # moves that create threats
-      forcing: 0.6       # checks, captures, threats
-      sacrifice: 0.8
-      even_trade: -1.0   # avoid simple trades
-      queen_trade: -1.6  # keep the queens on
+      complexity: 0.6    # positions with many captures / tension
+      threat: 0.4        # moves that create threats
+      forcing: 0.3       # checks, captures, threats
+      sacrifice: 0.4
+      even_trade: -0.6   # avoid simple trades
+      queen_trade: -1.0  # keep the queens on
 
 brilliant:             # Tal mode: always go for sacrifices that keep the position at least equal
   enabled: false
@@ -145,13 +145,13 @@ human_check:           # v5.1: blunder check like a strong human, WITHOUT Stockf
 maia_sacrifices:       # v5.2: Tal's sacrifices WITHOUT Stockfish, judged by Maia's own feel
   enabled: true
   candidates: 20       # Maia's 20 most natural moves
-  min_prob: 0.005
+  min_prob: 0.03       # only sacrifices a strong human would actually consider (3%+)
   max_checks: 4        # check at most 4 sacrifices per move (keeps it fast)
   replies: 5
-  sound_above: 0.45    # after the opponent's best natural reply Maia still gives us 45%+: play it (always)
-  spec_above: 0.38     # 38-45%: speculative, Tal-style
+  sound_above: 0.52    # after the opponent's best natural reply Maia still gives us 52%+: play it (always)
+  spec_above: 0.46     # 46-52%: speculative, Tal-style
   chance: 1.0
-  spec_chance: 0.5
+  spec_chance: 0.35
   min_clock_seconds: 30
 
 guard:                 # Stockfish blunder guard. Maia still chooses every move.
