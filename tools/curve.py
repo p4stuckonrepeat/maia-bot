@@ -68,7 +68,7 @@ def analyse(games, out_name):
     """games: list of (chess.pgn.Game, set of colors to track)."""
     sf = chess.engine.SimpleEngine.popen_uci(os.environ.get("STOCKFISH", "/usr/games/stockfish"))
     sf.configure({"Threads": 4, "Hash": 256})
-    rows = []
+    rows, games_out = [], []
     try:
         for gi, (g, colors) in enumerate(games):
             b = g.board()
@@ -90,6 +90,12 @@ def analyse(games, out_name):
                 node = node.variations[0] if node.variations else node
                 if b.turn in colors:
                     sac = is_sac(b, m, evals[i + 1][1])
+                    piece = b.piece_at(m.from_square).symbol().upper()
+                    npm = sum(VAL[p.piece_type] for p in b.piece_map().values() if p.piece_type not in (chess.PAWN, chess.KING))
+                    phase = "opening" if b.fullmove_number <= 12 else ("endgame" if npm <= 20 else "middlegame")
+                    prev_drop = 0.0
+                    if i >= 1:   # how much the opponent's last move lost (win%, from their side)
+                        prev_drop = max(0.0, win_pct(evals[i - 1][0]) - win_pct(-evals[i][0]))
                     note = node.comment or ""
                     before, best = evals[i]
                     after = -evals[i + 1][0]
@@ -98,14 +104,24 @@ def analyse(games, out_name):
                                      "move": b.fullmove_number, "loss": max(0, min(500, before - after)),
                                      "top": m == best, "eval": before, "sac": sac,
                                      "brill": sac and before - after <= 20 and after >= -100,
-                                     "hunter": "sacrifice:" in note,
+                                     "hunter": "sacrifice:" in note, "piece": piece, "phase": phase,
+                                     "prev_drop": prev_drop, "color": "w" if b.turn == chess.WHITE else "b",
                                      "sharp": sum(1 for x in b.legal_moves if b.is_capture(x)) >= 3})
                 b.push(m)
+            res = g.headers.get("Result", "*")
+            for col in colors:
+                pts = {"1-0": 1.0, "0-1": 0.0}.get(res, 0.5)
+                if col == chess.BLACK:
+                    pts = 1.0 - pts
+                seq = [win_pct(e[0]) if (k % 2 == 0) == (col == chess.WHITE) else 100 - win_pct(e[0])
+                       for k, e in enumerate(evals)]
+                games_out.append({"game": f"{out_name}:{gi}", "pts": pts, "max_win": max(seq[10:] or [50]),
+                                  "min_win": min(seq[10:] or [50])})
             if gi % 20 == 0:
                 print(f"analysed {gi + 1}/{len(games)} games", flush=True)
     finally:
         sf.quit()
-    json.dump(rows, open(out_name, "w"))
+    json.dump({"moves": rows, "games": games_out}, open(out_name, "w"))
     print(f"{len(rows)} moves analysed -> {out_name}")
 
 
@@ -173,11 +189,76 @@ def summary(rows):
             sum(r["loss"] > 100 for r in rows) / len(rows), sum(r["loss"] > 200 for r in rows) / len(rows), len(rows))
 
 
+CLASSES = [("best", None), ("excellent", 2), ("good", 5), ("inaccuracy", 10), ("mistake", 20), ("blunder", 999)]
+
+
+def classify(r):
+    """chess.com-style move classes from the win-percentage drop (public approximation)."""
+    drop = max(0.0, r["wb"] - r["wa"])
+    if r.get("brill") and drop <= 2 and 30 <= r["wa"] <= 90:
+        return "brilliant"
+    if r.get("prev_drop", 0) >= 10 and drop >= 10:
+        return "miss"            # did not punish the opponent's mistake
+    if r["top"]:
+        return "best"
+    for name, lim in CLASSES[1:]:
+        if drop <= lim:
+            return name
+    return "blunder"
+
+
+def insights(sets, gsets, out):
+    L = ["", "## chess.com-style insights (approximation with the public Lichess formulas)", ""]
+    names = ["brilliant", "best", "excellent", "good", "inaccuracy", "mistake", "miss", "blunder"]
+    per = {}
+    for who in ("human", "bot"):
+        rs = sets.get(who, [])
+        games = max(1, len({(r.get("game"), r.get("color")) for r in rs}))
+        cnt = {n: 0 for n in names}
+        for r in rs:
+            if "wb" in r:
+                cnt[classify(r)] += 1
+        per[who] = {n: cnt[n] / games for n in names}
+    L += ["### Moves per game by class", "", "| Class | Humans 2300-2600 | Bot |", "|---|---|---|"]
+    for n in names:
+        L.append(f"| {n} | {per['human'][n]:.2f} | {per['bot'][n]:.2f} |")
+    out["classes_per_game"] = per
+
+    def acc(rs):
+        v = [move_accuracy(r["wb"], r["wa"]) for r in rs if "wb" in r]
+        return statistics.mean(v) if v else float("nan")
+    L += ["", "### Accuracy by phase", "", "| Phase | Humans | Bot |", "|---|---|---|"]
+    for ph in ("opening", "middlegame", "endgame"):
+        L.append(f"| {ph} | {acc([r for r in sets.get('human', []) if r.get('phase') == ph]):.1f}% | "
+                 f"{acc([r for r in sets.get('bot', []) if r.get('phase') == ph]):.1f}% |")
+    L += ["", "### Accuracy by piece moved", "", "| Piece | Humans | Bot |", "|---|---|---|"]
+    for pc, nm in (("P", "pawn"), ("N", "knight"), ("B", "bishop"), ("R", "rook"), ("Q", "queen"), ("K", "king")):
+        L.append(f"| {nm} | {acc([r for r in sets.get('human', []) if r.get('piece') == pc]):.1f}% | "
+                 f"{acc([r for r in sets.get('bot', []) if r.get('piece') == pc]):.1f}% |")
+    L += ["", "### Converting and saving games", "", "| | Humans | Bot |", "|---|---|---|"]
+    for label, cond, good in (("won from a winning position (85%+ at some point)", lambda g: g["max_win"] >= 85, lambda g: g["pts"] == 1),
+                              ("saved (draw or win) from a lost position (under 15%)", lambda g: g["min_win"] <= 15, lambda g: g["pts"] >= 0.5)):
+        vals = []
+        for who in ("human", "bot"):
+            gs = [g for g in gsets.get(who, []) if cond(g)]
+            vals.append(f"{sum(good(g) for g in gs) / len(gs):.0%} ({len(gs)})" if gs else "-")
+        L.append(f"| {label} | {vals[0]} | {vals[1]} |")
+    return L
+
+
 def compare():
     sets = {}
+    gsets = {}
     for f in glob.glob("curve-*.json"):
+        if "summary" in f:
+            continue
         who = "bot" if "bot" in f else "human"
-        sets.setdefault(who, []).extend(json.load(open(f)))
+        d = json.load(open(f))
+        if isinstance(d, dict):
+            sets.setdefault(who, []).extend(d["moves"])
+            gsets.setdefault(who, []).extend(d["games"])
+        else:
+            sets.setdefault(who, []).extend(d)
     L = ["# Accuracy curve: bot vs strong humans (2300-2600, Lichess Elite Database)", "",
          "Loss = centipawns lost per move (Stockfish). Top = played Stockfish's first choice.", ""]
     cuts = [(f"moves {a}-{b if b < 999 else '+'}", lambda r, a=a, b=b: a <= r["move"] <= b) for a, b in BUCKETS]
@@ -220,6 +301,7 @@ def compare():
               f"| top 10% | {q(ga_h, .9):.1f}% | {q(ga_b, .9):.1f}% |",
               f"| games | {len(ga_h)} | {len(ga_b)} |"]
         out["game_accuracy"] = {"human": statistics.mean(ga_h), "bot": statistics.mean(ga_b)}
+    L += insights(sets, gsets, out)
     json.dump(out, open("curve-summary.json", "w"), indent=1)
     text = "\n".join(L)
     open("curve-report.md", "w").write(text + "\n")
