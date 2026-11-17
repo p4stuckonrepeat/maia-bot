@@ -79,11 +79,11 @@ tal_rules2:            # rules fitted on 46,000 Tal positions (v5: Tal traits + 
   no_stockfish: true   # v5: Stockfish completely off        # (Tal was much more accurate than the model: 17 vs 29 cp average loss)
   file: tal/tal-rules2.json
   candidates: 10       # only Maia's 10 most natural moves are considered (stays human)
-  temperature: 0.7     # sampling between Tal-scored moves (higher = more human variety and mistakes)
+  temperature: 0.85    # sampling between Tal-scored moves (tuned to strong humans)
   tal_traits_boost: 1.7  # Tal style: attack, complications, sacrifices count 1.7x
   depth: 12
   stockfish_weight: 0.4  # v5.x: weight of Maia's own position judgement (lower = wilder, more mistakes)
-  lapse_chance: 0.22   # base: 22% of moves without the quality check (human inattention)
+  lapse_chance: 0.28   # base: 28% of moves without the quality check (tuned to strong humans)
   human_curve:         # measured on 250 games of 2300-2600 players (Lichess Elite Database)
     enabled: true
     start_move: 20     # from move 20 on, instinct moves get more frequent (humans tire / positions get harder)
@@ -140,7 +140,7 @@ human_check:           # v5.1: blunder check like a strong human, WITHOUT Stockf
   min_gain: 0.2        # switch only if another move is clearly safer (+20% winning chances)
   min_clock_seconds: 20
   static_first: true   # v5.2: instant "loose pieces" scan; only if it smells a tactic, look 2 moves deep (Maia)
-  deep_ok_above: 0.25  # blunder check only stops really bad blunders (more human mistakes get through)
+  deep_ok_above: 0.2   # blunder check only for really bad blunders
 
 maia_sacrifices:       # v5.2: Tal's sacrifices WITHOUT Stockfish, judged by Maia's own feel
   enabled: true
@@ -170,7 +170,7 @@ critical_calc:         # v6: real calculation with Maia only (Leela-style, no St
   batch: 8
   cpuct: 1.5
   fpu_reduction: 0.1
-  margin: 0.12         # keep the chosen move unless calculation shows it is clearly worse
+  margin: 0.18         # calculation only overrides clearly bad moves (tuned to strong humans)
   min_prior: 0.03
   min_visits: 3
   natural_visits: 8
