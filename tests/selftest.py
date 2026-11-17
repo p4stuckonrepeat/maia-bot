@@ -186,6 +186,15 @@ if _os.path.exists("tal/tal-rules2.json"):
     print("tal rules test:", fl.san(rmove), "| top scored:",
           [(fl.san(m), round(l, 2), cp) for m, l, cp in sorted(rscored, key=lambda x: -x[1])[:4]], flush=True)
 
+# Engine-free safety scan: the user's game (16.Bd4?? ...e5 wins the knight) must be flagged, a quiet one not.
+from bot.safety import danger_after, offered
+sb = chess.Board("r1b2r1k/1p1nbppp/p1q1p3/8/3BNP2/5Q2/PPP1B1PP/R4RK1 b - - 0 16")
+assert danger_after(sb, chess.WHITE), "the ...e5 tactic must be flagged"
+qb = chess.Board()
+qb.push_uci("e2e4")
+assert not danger_after(qb, chess.WHITE)
+print("safety scan test: ...e5 pattern flagged, quiet position not", flush=True)
+
 # Calculation (Leela-style, Maia only): the natural-looking 3...Nf6?? must be changed (Qxf7#).
 from bot.mcts import MCTS
 mc = MCTS(maia)

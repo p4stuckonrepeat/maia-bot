@@ -301,7 +301,14 @@ class Bot:
             if n:
                 notes.append(n)
         hcfg = self.cfg.get("human_check", {})
-        if hcfg.get("enabled") and (clock is None or clock > hcfg.get("min_clock_seconds", 20) * 1000):
+        scfg = self.cfg.get("maia_sacrifices", {})
+        sacrificed = False
+        if scfg.get("enabled") and (clock is None or clock > scfg.get("min_clock_seconds", 30) * 1000):
+            move, n = self.maia_sacrifice(board, move, mcfg, opp_rating, scfg)
+            if n:
+                notes.append(n)
+                sacrificed = True
+        if hcfg.get("enabled") and not sacrificed and (clock is None or clock > hcfg.get("min_clock_seconds", 20) * 1000):
             move, n = self.human_check(board, move, mcfg, opp_rating, hcfg)
             if n:
                 notes.append(n)
@@ -335,7 +342,89 @@ class Bot:
         finally:
             board.pop()
 
+    def _deep(self, board, move, mcfg, opp_rating, replies=3, answers=3):
+        """Two moves deep, Maia only: their best natural reply (or cheap shot), then our best natural answer."""
+        from bot.safety import VAL
+        board.push(move)
+        try:
+            if board.is_checkmate():
+                return 1.0
+            theirs = self.maia.choose(board, mcfg, opp_rating, candidates=replies)[1]
+            shots = [m for m in board.legal_moves if board.is_capture(m) or board.gives_check(m)]
+            shots.sort(key=lambda m: -(VAL[board.piece_type_at(m.to_square)] if board.piece_type_at(m.to_square) else 0))
+            tried = [c["move"] for c in theirs] + [m for m in shots[:2] if m not in [c["move"] for c in theirs]]
+            worst = 1.0
+            for r in tried:
+                board.push(r)
+                try:
+                    if board.is_checkmate():
+                        return 0.0
+                    if board.is_game_over(claim_draw=True):
+                        val = 0.5
+                    else:
+                        ours = self.maia.choose(board, mcfg, opp_rating, candidates=answers)[1]
+                        val = 0.0
+                        for a in ours:
+                            board.push(a["move"])
+                            mate = board.is_checkmate()
+                            board.pop()
+                            w = a.get("wdl", (500, 0, 500))
+                            val = max(val, 1.0 if mate else (w[0] + 0.5 * w[1]) / 1000)
+                    worst = min(worst, val)
+                finally:
+                    board.pop()
+            return worst
+        finally:
+            board.pop()
+
+    def maia_sacrifice(self, board, move, mcfg, opp_rating, scfg):
+        """Tal's sacrifices without Stockfish: a natural move that leaves a piece to be taken, if Maia feels
+        the position still holds after the opponent's best natural reply."""
+        from bot.safety import offered
+        cands = self.maia.choose(board, mcfg, opp_rating, candidates=int(scfg.get("candidates", 20)))[1]
+        sacs = [c for c in cands if c["policy"] >= float(scfg.get("min_prob", 0.005)) and offered(board, c["move"])]
+        if not sacs:
+            return move, None
+        good, spec = [], []
+        for c in sacs[:int(scfg.get("max_checks", 4))]:
+            v = self._worst_case(board, c["move"], mcfg, opp_rating, int(scfg.get("replies", 5)))
+            if v >= float(scfg.get("sound_above", 0.45)):
+                good.append((c, v))
+            elif v >= float(scfg.get("spec_above", 0.38)):
+                spec.append((c, v))
+        pool = None
+        if good and random.random() < float(scfg.get("chance", 1.0)):
+            pool, label = good, "sacrifice"
+        elif spec and random.random() < float(scfg.get("spec_chance", 0.4)):
+            pool, label = spec, "speculative sacrifice"
+        if not pool:
+            return move, None
+        c, v = random.choices(pool, weights=[x[0]["policy"] + 0.01 for x in pool])[0]
+        return c["move"], f"{label}: {board.san(c['move'])} (Maia: {v:.0%} after their best reply)" + (
+            "" if c["move"] == move else f" instead of {board.san(move)}")
+
     def human_check(self, board, move, mcfg, opp_rating, hcfg):
+        """Blunder check like a strong human: first a static "loose pieces" scan (no engine, instant); only if it
+        sees a cheap shot for the opponent, look two moves deep with Maia and switch to a safer natural move."""
+        from bot.safety import danger_after
+        if hcfg.get("static_first", False):
+            board.push(move)
+            danger = danger_after(board, not board.turn)
+            board.pop()
+            if danger:
+                deep = self._deep(board, move, mcfg, opp_rating)
+                if deep < float(hcfg.get("deep_ok_above", 0.35)):
+                    best, best_val = None, deep
+                    for c in self.maia.choose(board, mcfg, opp_rating, candidates=int(hcfg.get("alternatives", 4)))[1]:
+                        if c["move"] == move:
+                            continue
+                        v = self._deep(board, c["move"], mcfg, opp_rating)
+                        if v > best_val:
+                            best, best_val = c["move"], v
+                    if best is not None and best_val - deep >= float(hcfg.get("min_gain", 0.2)):
+                        return best, (f"blunder check (2 moves deep): {board.san(move)} ({deep:.0%}) -> "
+                                      f"{board.san(best)} ({best_val:.0%})")
+                return move, None
         """Blunder check like a strong human, without an engine: look at the opponent's most natural replies;
         if the chosen move collapses against one of them while another natural move holds, play that instead."""
         k = int(hcfg.get("replies", 6))
