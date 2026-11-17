@@ -74,8 +74,9 @@ assist:                # quality filter: only between Maia's own natural candida
   brilliant_chance: 0.85   # if a natural candidate sacrifices material and Stockfish rates it (nearly) best, play it this often
   brilliant_margin_cp: 40  # "nearly best" = at most 0.4 pawns below the best natural candidate
 
-tal_rules2:            # rules fitted on 46,000 Tal positions: Tal model + Stockfish's verdict on its natural moves
-  enabled: true        # (Tal was much more accurate than the model: 17 vs 29 cp average loss)
+tal_rules2:            # rules fitted on 46,000 Tal positions (v5: Tal traits + Maia's own feel, no Stockfish)
+  enabled: true
+  no_stockfish: true   # v5: Stockfish completely off        # (Tal was much more accurate than the model: 17 vs 29 cp average loss)
   file: tal/tal-rules2.json
   candidates: 10       # only Maia's 10 most natural moves are considered (stays human)
   temperature: 0.5     # sampling between Tal-scored moves (lower = closer to Tal)
@@ -112,7 +113,7 @@ tal_rules2:            # rules fitted on 46,000 Tal positions: Tal model + Stock
       queen_trade: -1.6  # keep the queens on
 
 brilliant:             # Tal mode: always go for sacrifices that keep the position at least equal
-  enabled: true
+  enabled: false
   chance: 1.0          # Tal show: always (real Tal took 43% of available sound sacrifices)
   min_eval_cp: -60     # sacrifice whenever the position stays about equal (-0.6 or better): always played
   min_prob: 0.003      # brilliant hunting: also hidden moves (Maia gives 0.3%+)
@@ -132,7 +133,7 @@ brilliant:             # Tal mode: always go for sacrifices that keep the positi
   min_now_cp: -400     # also sacrifice for counterplay when worse (Tal's practical chances)
 
 guard:                 # Stockfish blunder guard. Maia still chooses every move.
-  enabled: true        # true = ON, false = OFF (applies mid-game within ~30 s)
+  enabled: false        # true = ON, false = OFF (applies mid-game within ~30 s)
   playable_cp: -150    # only check moves when the position is at least this good for the bot
   lost_cp: -500        # Tal mode: veto only real disasters that leave the bot clearly lost (-5)...
   min_drop_cp: 600     # ...and cost 6+ pawns (hanging the queen etc.); mates are always blocked

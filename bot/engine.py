@@ -287,8 +287,16 @@ class Guard:
                 ph = _phase(board)
                 ph = ph if ph in ("opening", "middlegame", "endgame") else "middlegame"
         color, depth = board.turn, int(rcfg.get("depth", 12))
-        with self.lock:
-            res = [self.after_pv(board, c["move"], color, depth) for c in cands]
+        if rcfg.get("no_stockfish"):
+            # Stockfish completely off: positions are judged by Maia's own feel (its win/draw/loss head)
+            def _cp(c):
+                wdl = c.get("wdl", (500, 0, 500))
+                e = min(0.999, max(0.001, (wdl[0] + 0.5 * wdl[1]) / 1000))
+                return int(max(-1000, min(1000, 400 * _math.log10(e / (1 - e)))))
+            res = [(_cp(c), []) for c in cands]
+        else:
+            with self.lock:
+                res = [self.after_pv(board, c["move"], color, depth) for c in cands]
         best = max(cp for cp, _ in res)
         hc = rcfg.get("human_curve", {})
         ahead_factor = 1.0
