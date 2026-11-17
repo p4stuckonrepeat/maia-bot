@@ -206,6 +206,9 @@ class Bot:
                         for m in moves:
                             board.push_uci(m)
                         if board.turn == color and len(moves) != sent_ply and not board.is_game_over():
+                            if self.human_touches(gid, board, state, color, opp_rating, len(moves)):
+                                finished = True
+                                break
                             t0 = time.time()
                             move, note, opening, top_prob = self.pick_move(gid, board, state, color,
                                                                            opp_rating)
@@ -214,6 +217,7 @@ class Bot:
                                                   len(moves), top_prob, board.legal_moves.count(),
                                                   opening is not None, self.cfg.get("timing", {}),
                                                   board=board, move=move)
+                            think = self.adjust_think(think, note, state, color)
                             wait = think - (time.time() - t0)
                             if wait > 0:
                                 time.sleep(wait)
@@ -239,6 +243,60 @@ class Bot:
                 self.active.discard(gid)
             self.book.end(gid)
             log(f"[{gid}] game thread ended")
+
+    def _expected(self, board, opp_rating):
+        """Our winning chances by Maia's own judgement (best natural move), 0..1."""
+        top = self.maia.choose(board, self.cfg["maia"], opp_rating, candidates=4)[1]
+        return max(((c["wdl"][0] + 0.5 * c["wdl"][1]) / 1000 for c in top if c.get("wdl")), default=0.5)
+
+    def human_touches(self, gid, board, state, color, opp_rating, ply):
+        """Resign hopeless positions, answer draw offers like a human. Returns True if the game was ended."""
+        hcfg = self.cfg.get("human_touches", {})
+        if not hcfg.get("enabled"):
+            return False
+        if not hasattr(self, "touch"):
+            self.touch = {}
+        t = self.touch.setdefault(gid, {"hopeless": 0, "draw_seen": -1})
+        opp = "b" if color == chess.WHITE else "w"
+        opp_clock = state.get(f"{opp}time")
+        offered = state.get(f"{opp}draw")
+        need_eval = (offered and t["draw_seen"] != ply) or board.fullmove_number >= int(hcfg.get("resign_from_move", 25))
+        if not need_eval:
+            return False
+        exp = self._expected(board, opp_rating)
+        if offered and t["draw_seen"] != ply:
+            t["draw_seen"] = ply
+            accept = (exp < float(hcfg.get("draw_if_below", 0.35))) or (
+                board.fullmove_number >= int(hcfg.get("draw_from_move", 30)) and abs(exp - 0.5) <= float(hcfg.get("draw_equal_band", 0.06)))
+            self.api._req("POST", f"/api/bot/game/{gid}/draw/{'yes' if accept else 'no'}")
+            log(f"[{gid}] draw offer {'accepted' if accept else 'declined'} (Maia: {exp:.0%})")
+            if accept:
+                return False      # the game stream will report the end
+        if board.fullmove_number >= int(hcfg.get("resign_from_move", 25)):
+            t["hopeless"] = t["hopeless"] + 1 if exp < float(hcfg.get("resign_below", 0.03)) else 0
+            if t["hopeless"] >= int(hcfg.get("resign_after", 3)) and not (
+                    opp_clock is not None and opp_clock < float(hcfg.get("keep_playing_if_opp_clock_below", 20)) * 1000):
+                log(f"[{gid}] resigning: hopeless (Maia {exp:.0%} for {t['hopeless']} moves)")
+                self.api._req("POST", f"/api/bot/game/{gid}/resign")
+                return True
+        return False
+
+    def adjust_think(self, think, note, state, color):
+        """Tal sits, then sacrifices; plays fast when the opponent is in time trouble."""
+        hcfg = self.cfg.get("human_touches", {})
+        if not hcfg.get("enabled"):
+            return think
+        mine, opp = ("w", "b") if color == chess.WHITE else ("b", "w")
+        my_clock, opp_clock = state.get(f"{mine}time"), state.get(f"{opp}time")
+        if note and "sacrifice" in note:
+            lo, hi = hcfg.get("sacrifice_think", [8, 20])
+            t = random.uniform(lo, hi)
+            if my_clock is not None:
+                t = min(t, my_clock / 1000 * float(hcfg.get("max_clock_share", 0.08)))
+            think = max(think, t)
+        elif opp_clock is not None and opp_clock < float(hcfg.get("blitz_out_if_opp_below", 30)) * 1000:
+            think = min(think, random.uniform(0.3, 1.2))
+        return think
 
     def pick_move(self, gid, board, state, color, opp_rating):
         """Return (move, guard note or None, opening name if from the book, Maia's top probability)."""
@@ -311,6 +369,22 @@ class Bot:
             if n:
                 notes.append(n)
                 sacrificed = True
+        ccfg = self.cfg.get("critical_calc", {})
+        if ccfg.get("enabled") and (clock is None or clock > ccfg.get("min_clock_seconds", 60) * 1000):
+            sharp = sum(1 for m in board.legal_moves if board.is_capture(m)) >= int(ccfg.get("sharp_captures", 3))
+            if sacrificed or sharp:
+                budget = float(ccfg.get("sacrifice_seconds" if sacrificed else "sharp_seconds", 3))
+                if clock is not None:
+                    budget = min(budget, clock / 1000 * float(ccfg.get("max_clock_share", 0.05)))
+                fixed = mcfg.get("oppo_elo", "opponent")
+                opp_e = int(min(2600, max(600, fixed if isinstance(fixed, (int, float)) else (opp_rating or mcfg["elo"]))))
+                ctop = top if len(top) >= 2 else self.maia.choose(board, mcfg, opp_rating, candidates=8)[1]
+                new, cn = self.mcts.think(board, move, ctop, ccfg, int(mcfg["elo"]), opp_e, budget)
+                if cn:
+                    notes.append(cn)
+                    if sacrificed and new != move:
+                        sacrificed = False          # the calculation refuted the sacrifice
+                    move = new
         if hcfg.get("enabled") and not sacrificed and (clock is None or clock > hcfg.get("min_clock_seconds", 20) * 1000):
             move, n = self.human_check(board, move, mcfg, opp_rating, hcfg)
             if n:

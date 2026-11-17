@@ -156,6 +156,38 @@ maia_sacrifices:       # v5.2: Tal's sacrifices WITHOUT Stockfish, judged by Mai
   deep_bonus: 0.05
   min_clock_seconds: 30
 
+critical_calc:         # v6: real calculation with Maia only (Leela-style, no Stockfish) at critical moments
+  enabled: true
+  sharp_captures: 3    # sharp position = 3+ captures possible
+  sacrifice_seconds: 4 # before a sacrifice: up to 4 s of calculation
+  sharp_seconds: 2.5   # in sharp positions: up to 2.5 s
+  max_clock_share: 0.05
+  min_clock_seconds: 60
+  max_nodes: 300
+  width: 6
+  root_width: 10
+  max_depth: 8         # 4 moves each, like a strong human calculating a line
+  batch: 8
+  cpuct: 1.5
+  fpu_reduction: 0.1
+  margin: 0.12         # keep the chosen move unless calculation shows it is clearly worse
+  min_prior: 0.03
+  min_visits: 3
+  natural_visits: 8
+
+human_touches:         # v6
+  enabled: true
+  sacrifice_think: [8, 20]  # "Tal sits, then sacrifices": 8-20 s before a sacrifice (max 8% of the clock)
+  max_clock_share: 0.08
+  blitz_out_if_opp_below: 30  # opponent under 30 s: move almost instantly
+  resign_from_move: 25
+  resign_below: 0.03   # resign when Maia gives us under 3%...
+  resign_after: 3      # ...three moves in a row
+  keep_playing_if_opp_clock_below: 20  # but not if the opponent might flag
+  draw_if_below: 0.35  # accept a draw offer when clearly worse
+  draw_from_move: 30   # or after move 30 in a dead equal position
+  draw_equal_band: 0.06
+
 adapt:                 # v6: reads the opponent from their moves only (never their rating)
   enabled: true
   window: 8            # last 8 opponent moves
