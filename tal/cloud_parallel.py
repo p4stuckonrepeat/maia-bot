@@ -74,6 +74,27 @@ def main():
         json.dump(out, open("young-info.json", "w"), indent=1)
         upload(TAG, "young-info.json", "young-info.json")   # done signal
         return
+    if mode == "tactics":    # tactics training: blunders removed from the model's instinct, Tal style kept
+        out = {"gpu": gpu}
+        try:
+            download("tactics.jsonl.gz", "tactics.jsonl.gz")
+            download("study.jsonl.gz", "study.jsonl.gz")
+            download("tal-79m.pt", "tal-79m.pt", tag="tal-model")
+            env = {**os.environ, "TACTICS_FILE": "tactics.jsonl.gz", "STUDY_FILE": "study.jsonl.gz",
+                   "TAL_RESUME": "tal-79m.pt", "TT_OUT": "tactics.pt"}
+            p = subprocess.run(["python", "-u", "-m", "tal.tactics"], env=env, stdout=subprocess.PIPE,
+                               stderr=subprocess.STDOUT, text=True)
+            print(p.stdout, flush=True)
+            if p.returncode != 0:
+                raise RuntimeError("tactics training failed:\n" + "\n".join(p.stdout.splitlines()[-25:]))
+            out.update(json.load(open("tactics-info.json")))
+            if os.path.exists("tactics.pt"):
+                upload(TAG, "tactics.pt", "tactics.pt")
+        except Exception as e:
+            out["error"] = str(e)
+        json.dump(out, open("tactics-info.json", "w"), indent=1)
+        upload(TAG, "tactics-info.json", "tactics-info.json")   # done signal
+        return
     if mode == "antiblunder":
         out = {"gpu": gpu}
         try:
