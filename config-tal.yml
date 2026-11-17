@@ -175,6 +175,11 @@ critical_calc:         # v6: real calculation with Maia only (Leela-style, no St
   min_visits: 3
   natural_visits: 8
 
+virtual_clock:         # unlimited / correspondence games: play as if it were rapid 10+0
+  enabled: true
+  minutes: 10
+  increment: 0
+
 human_misses:          # v6 tune: human traits measured on 500 games of 2300-2600 players
   enabled: true
   opp_mistake_drop: 0.15 # after an opponent mistake (lost 15%+ winning chances)...

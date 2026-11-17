@@ -205,6 +205,7 @@ class Bot:
                         board = chess.Board()
                         for m in moves:
                             board.push_uci(m)
+                        state = self.virtual_clock(gid, state, color, board)
                         if board.turn == color and len(moves) != sent_ply and not board.is_game_over():
                             if self.human_touches(gid, board, state, color, opp_rating, len(moves)):
                                 finished = True
@@ -227,6 +228,7 @@ class Bot:
                                 book_moves += 1
                                 last_opening = opening
                             if self.api.move(gid, move.uci()):
+                                self.virtual_spend(gid, time.time() - t0)
                                 sent_ply = len(moves)
                                 log(f"[{gid}] {board.fullmove_number}{'.' if color else '...'}"
                                     f"{board.san(move)} ({time.time() - t0:.2f}s)"
@@ -243,6 +245,34 @@ class Bot:
                 self.active.discard(gid)
             self.book.end(gid)
             log(f"[{gid}] game thread ended")
+
+    def virtual_clock(self, gid, state, color, board):
+        """Games without a clock (unlimited / correspondence) are played as if they were rapid
+        (default 10+0): a virtual clock runs down with the bot's real thinking time, so timing,
+        calculation budgets and time-trouble behaviour all work like in a real rapid game."""
+        vc = self.cfg.get("virtual_clock", {})
+        w = state.get("wtime")
+        if not vc.get("enabled") or (w is not None and w < 36000000):   # real clock (under 10 h): use it
+            return state
+        if not hasattr(self, "vclocks"):
+            self.vclocks = {}
+        base = float(vc.get("minutes", 10)) * 60000
+        c = self.vclocks.setdefault(gid, {"mine": base, "opp": base, "color": color, "last": time.time(),
+                                          "turn": board.turn})
+        if board.turn == color and c["turn"] != color:          # opponent just moved: charge their time
+            c["opp"] = max(1000.0, c["opp"] - (time.time() - c["last"]) * 1000 + float(vc.get("increment", 0)) * 1000)
+        c["turn"] = board.turn
+        mine, opp = c["mine"], c["opp"]
+        wk, bk = ("w", "b") if color == chess.WHITE else ("b", "w")
+        return {**state, f"{wk}time": int(mine), f"{bk}time": int(opp),
+                f"{wk}inc": int(float(vc.get("increment", 0)) * 1000), f"{bk}inc": int(float(vc.get("increment", 0)) * 1000)}
+
+    def virtual_spend(self, gid, seconds):
+        c = getattr(self, "vclocks", {}).get(gid)
+        if c:
+            c["mine"] = max(1000.0, c["mine"] - seconds * 1000 + float(self.cfg.get("virtual_clock", {}).get("increment", 0)) * 1000)
+            c["last"] = time.time()
+            c["turn"] = not c["color"]
 
     def _expected(self, board, opp_rating):
         """Our winning chances by Maia's own judgement (best natural move), 0..1."""
