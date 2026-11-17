@@ -90,7 +90,7 @@ tal_rules2:            # rules fitted on 46,000 Tal positions (v5: Tal traits + 
     per_move: 0.008    # +0.8% per move
     sharp_extra: 0.04  # sharp positions (3+ captures possible): humans err more
     ahead_cp: 300      # clearly ahead (+3): humans relax
-    ahead_extra: 0.15
+    ahead_extra: 0.25   # clearly ahead: humans relax and spoil more often
     ahead_stockfish_factor: 0.5
     late_start: 30     # after move 30 strong humans err clearly more (measured): match that
     late_extra: 0.08
@@ -178,9 +178,9 @@ critical_calc:         # v6: real calculation with Maia only (Leela-style, no St
 human_misses:          # v6 tune: human traits measured on 500 games of 2300-2600 players
   enabled: true
   opp_mistake_drop: 0.15 # after an opponent mistake (lost 15%+ winning chances)...
-  miss_extra: 0.25     # ...25% more instinct moves: like humans, it sometimes misses the chance
+  miss_extra: 0.4      # ...40% more instinct moves: like humans, it sometimes misses the chance
   endgame_material: 20 # endgame = 20 points of pieces or less (both sides)
-  endgame_extra: 0.1   # endgames a bit less exact
+  endgame_extra: 0.2   # endgames less exact (humans 91.8% vs engines much higher)
 
 human_touches:         # v6
   enabled: true
@@ -266,7 +266,7 @@ openings:
     kid_vs_nf3:      {weight: 100, line: "g1f3 g8f6 * g7g6 * f8g7", budget: 200}
   book:
     enabled: true
-    path: book-tal-rep.json   # attacking repertoire built from 2400+ games (Tal's own book: book-tal.json)
+    path: book-tal-sharp.json   # attacking repertoire built from 2400+ games (Tal's own book: book-tal.json)
 
 matchmaking:           # when idle, challenge other Lichess bots (to measure the real rating)
   enabled: false
