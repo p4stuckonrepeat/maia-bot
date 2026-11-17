@@ -246,6 +246,7 @@ class Bot:
         if move:
             return move, None, opening, 1.0
         mcfg, gcfg, scfg = self.cfg["maia"], self.cfg.get("guard", {}), self.cfg.get("style", {})
+        level = self._opponent_form(gid, board, state, color, mcfg, opp_rating)
         move, top = None, []
         srch = self.cfg.get("search", {})
         clock = state.get("wtime" if color == chess.WHITE else "btime")
@@ -273,7 +274,7 @@ class Bot:
         if self.guard is None or low_clock:
             return move, calc_note, None, top_prob
         notes = [calc_note] if calc_note else []
-        rcfg = self.cfg.get("tal_rules2", {})
+        rcfg = self._adapt(self.cfg.get("tal_rules2", {}), "tal_rules2", level)
         lapse = (not rcfg.get("human_curve", {}).get("enabled")) and \
             random.random() < float(rcfg.get("lapse_chance", 0))   # a moment of human inattention
         if rcfg.get("enabled") and not lapse and (clock is None or clock > rcfg.get("min_clock_seconds", 40) * 1000):
@@ -301,8 +302,10 @@ class Bot:
             if n:
                 notes.append(n)
         hcfg = self.cfg.get("human_check", {})
-        scfg = self.cfg.get("maia_sacrifices", {})
+        scfg = self._adapt(self.cfg.get("maia_sacrifices", {}), "maia_sacrifices", level)
         sacrificed = False
+        if level != "normal" and self.cfg.get("adapt", {}).get("note", True):
+            notes.append(f"opponent {level}")
         if scfg.get("enabled") and (clock is None or clock > scfg.get("min_clock_seconds", 30) * 1000):
             move, n = self.maia_sacrifice(board, move, mcfg, opp_rating, scfg)
             if n:
@@ -318,6 +321,52 @@ class Bot:
             if n:
                 notes.append(n)
         return move, ("; ".join(notes) or None), None, top_prob
+
+    def _opponent_form(self, gid, board, state, color, mcfg, opp_rating):
+        """Reads the opponent from their moves only (never their rating): how much did their last move lose
+        by Maia's own judgement? Keeps a running picture -> "shaky", "precise" or "normal"."""
+        acfg = self.cfg.get("adapt", {})
+        if not acfg.get("enabled"):
+            return "normal"
+        if not hasattr(self, "forms"):
+            self.forms = {}
+        f = self.forms.setdefault(gid, {"drops": [], "seen": 0})
+        if board.move_stack and board.turn == color and len(board.move_stack) != f["seen"]:
+            f["seen"] = len(board.move_stack)
+            last = board.move_stack[-1]
+            before = board.copy(stack=True)
+            before.pop()
+            if before.fullmove_number > int(acfg.get("from_move", 6)):
+                cands = self.maia.choose(before, mcfg, opp_rating, candidates=int(acfg.get("candidates", 8)))[1]
+                ex = lambda c: (c["wdl"][0] + 0.5 * c["wdl"][1]) / 1000 if c.get("wdl") else 0.5
+                if cands:
+                    best = max(ex(c) for c in cands)
+                    mine = next((ex(c) for c in cands if c["move"] == last), None)
+                    drop = (best - mine) if mine is not None else float(acfg.get("unknown_drop", 0.08))
+                    f["drops"] = (f["drops"] + [max(0.0, drop)])[-int(acfg.get("window", 8)):]
+        opp_clock = state.get("btime" if color == chess.WHITE else "wtime")
+        if opp_clock is not None and opp_clock < float(acfg.get("low_clock_seconds", 60)) * 1000:
+            return "shaky"
+        d = f["drops"]
+        if len(d) >= int(acfg.get("min_moves", 3)):
+            avg = sum(d) / len(d)
+            if avg >= float(acfg.get("shaky_above", 0.05)):
+                return "shaky"
+            if len(d) >= 4 and avg <= float(acfg.get("precise_below", 0.015)):
+                return "precise"
+        return "normal"
+
+    def _adapt(self, base, section, level):
+        over = self.cfg.get("adapt", {}).get(level, {}).get(section, {})
+        if not over:
+            return base
+        out = dict(base)
+        for k, v in over.items():
+            if isinstance(v, dict) and isinstance(out.get(k), dict):
+                out[k] = {**out[k], **v}
+            else:
+                out[k] = v
+        return out
 
     def _worst_case(self, board, move, mcfg, opp_rating, k):
         """Our expected score if the opponent finds their best natural reply (Maia's own feel, no Stockfish)."""
@@ -388,6 +437,8 @@ class Bot:
         good, spec = [], []
         for c in sacs[:int(scfg.get("max_checks", 4))]:
             v = self._worst_case(board, c["move"], mcfg, opp_rating, int(scfg.get("replies", 5)))
+            if v >= float(scfg.get("spec_above", 0.38)) and scfg.get("deep_check"):
+                v = min(v, self._deep(board, c["move"], mcfg, opp_rating) + float(scfg.get("deep_bonus", 0.05)))
             if v >= float(scfg.get("sound_above", 0.45)):
                 good.append((c, v))
             elif v >= float(scfg.get("spec_above", 0.38)):

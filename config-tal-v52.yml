@@ -1,0 +1,219 @@
+# TAL PROFILE: plays as close to Mikhail Tal as we can measure. Maia-3 Lichess bot settings. Edit on github.com; most changes apply within ~30 s, even mid-session.
+
+maia:
+  model: maia3-79m     # (model change needs a restart)
+  checkpoint: tal-79m.pt   # Maia-3 79M fine-tuned on Tal's games (downloaded at start)
+  elo: 2600            # rating Maia imitates (trained range 600-2600)
+  temperature: 0.75    # 0 = always most likely move, 1 = full human randomness
+  top_p: 1.0           # only sample from the most likely moves covering this probability
+  oppo_elo: 2600       # opponent rating Maia assumes; "opponent" = real rating (plays sloppier vs weak players)
+
+search:                # light human-like calculation with Maia's own judgement (no Stockfish)
+  enabled: false
+  candidates: 4        # natural moves considered (Maia's most likely)
+  depth: 1             # 1 = check the opponent's likely replies; 2 = also our answer (slower)
+  widths: [3, 2]       # replies considered at each level
+  margin: 0.10         # moves within 10% expected score of the best line stay eligible
+  skip_if_prob: 0.9    # don't calculate when one move is obvious
+  min_clock_seconds: 30
+
+mcts:                  # real calculation, Leela-style, with Maia only (no Stockfish), kept human
+  enabled: false
+  max_seconds: 3       # thinking budget on normal moves (part of the human move time, not extra)
+  hard_seconds: 7      # budget on hard moves (Maia unsure: top move under 35%)
+  hard_below: 0.35
+  max_clock_share: 0.04  # never more than 4% of the remaining clock on one move
+  max_nodes: 400       # positions looked at, at most
+  width: 6             # candidate moves per position (only natural, human moves)
+  root_width: 10
+  batch: 8             # positions evaluated per network call (faster on CPU)
+  fpu_reduction: 0.1
+  max_depth: 6         # calculation horizon in plies (3 moves each), like a strong human
+  cpuct: 1.5
+  sharpness: 0.5       # opponent assumed to answer like a strong human
+  margin: 0.15         # keep the natural (style) move unless the calculation shows a clear mistake (15% expected score)
+  min_prior: 0.04      # only moves Maia gives 4%+ (or its top 3) can be played: no engine-only moves
+  min_visits: 3
+  skip_if_prob: 0.85   # don't calculate obvious moves
+  min_clock_seconds: 45
+
+style:                 # consistent playing style (one "person" across games)
+  enabled: true
+  name: tal_learned  # Tal-style rules with weights fitted on Tal's games
+  rules_file: tal/tal-rules.json
+  strength: 2.0        # 0 = pure Maia, 1 = noticeable, 2+ = very consistent / predictable
+  candidates: 12       # Maia's moves the Tal rules choose between
+  min_relative_prob: 0.25 # rules may pick moves at least a quarter as likely as Maia's top choice
+  plans:               # classic theory between natural moves: free the worst piece, pawn breaks, go for the king
+    enabled: true
+    strength: 1.5      # 0 = off, 1 = a clear nudge, 2 = strong (Tal show: pawn breaks, pieces to the king)
+    min_relative_prob: 0.25  # only moves at least a quarter as likely as Maia's top choice
+
+timing:                # human-like thinking time, based only on the move (not on the clock)
+  enabled: true
+  speed: 1.0           # multiplies all times: 1.5 = slower, 0.7 = faster
+  book: [0.2, 0.8]     # seconds (min, max) for prepared opening moves
+  forced: [0.1, 0.5]   # only one legal move, or one move Maia is 95%+ sure about
+  obvious: [0.2, 1.0]  # recaptures and moves Maia is 80%+ sure about
+  follow_up: [0.3, 1.2]  # moving the same piece again right after moving it
+  normal: [1.0, 4.0]
+  hard_quick: [0.8, 2.5]   # hard moves are inconsistent: sometimes decided quickly...
+  hard: [3.0, 9.0]         # ...usually a few seconds...
+  long_think: [10.0, 25.0] # ...sometimes a long think
+  hard_quick_chance: 0.35
+  long_think_chance: 0.2
+  # safety net: under 30 s on the clock it plays fast so it never loses on time
+
+assist:                # quality filter: only between Maia's own natural candidate moves
+  enabled: false         # stops clearly worse choices when a natural alternative is much better
+  only_when_not_top: false # also checks Maia's own first choice (with more freedom, below)
+  max_loss_cp: 200     # only replace moves that are 2+ pawns worse than a natural alternative (real blunders)
+  top_max_loss_cp: 300 # Maia's own first choice: only if 3+ pawns worse
+  min_prob: 0.02       # candidates Maia gives at least 2% are considered (finds more sacrifices)
+  depth: 12            # the replacement is picked at random among the OK candidates, weighted by Maia
+  brilliant_chance: 0.85   # if a natural candidate sacrifices material and Stockfish rates it (nearly) best, play it this often
+  brilliant_margin_cp: 40  # "nearly best" = at most 0.4 pawns below the best natural candidate
+
+tal_rules2:            # rules fitted on 46,000 Tal positions (v5: Tal traits + Maia's own feel, no Stockfish)
+  enabled: true
+  no_stockfish: true   # v5: Stockfish completely off        # (Tal was much more accurate than the model: 17 vs 29 cp average loss)
+  file: tal/tal-rules2.json
+  candidates: 10       # only Maia's 10 most natural moves are considered (stays human)
+  temperature: 0.7     # sampling between Tal-scored moves (higher = more human variety and mistakes)
+  tal_traits_boost: 1.7  # Tal style: attack, complications, sacrifices count 1.7x
+  depth: 12
+  stockfish_weight: 0.4  # v5.x: weight of Maia's own position judgement (lower = wilder, more mistakes)
+  lapse_chance: 0.22   # base: 22% of moves without the quality check (human inattention)
+  human_curve:         # measured on 250 games of 2300-2600 players (Lichess Elite Database)
+    enabled: true
+    start_move: 20     # from move 20 on, instinct moves get more frequent (humans tire / positions get harder)
+    per_move: 0.008    # +0.8% per move
+    sharp_extra: 0.04  # sharp positions (3+ captures possible): humans err more
+    ahead_cp: 300      # clearly ahead (+3): humans relax
+    ahead_extra: 0.15
+    ahead_stockfish_factor: 0.5
+    late_start: 30     # after move 30 strong humans err clearly more (measured): match that
+    late_extra: 0.08
+    late_stockfish_factor: 0.6
+    max_lapse: 0.45
+    lapse_mode: tal    # "human errors" keep Tal's style: same Tal preferences, only Stockfish's precision is dropped
+    lapse_stockfish_factor: 0.0
+  min_clock_seconds: 60  # under 1 minute left: plays on instinct only (more time-pressure mistakes)
+  complicate_when_worse:   # Tal's practical chances: when worse, make it messy instead of defending passively
+    enabled: true
+    below_cp: 100        # seek complications unless clearly better (+1.0 or more)
+    stockfish_factor: 0.6  # Stockfish's verdict counts less then (accepts slightly weaker but trickier moves)
+    max_extra_loss_cp: 150 # but the bonus only goes to moves at most 1.5 pawns below the best natural move
+    bonus:
+      complexity: 0.6    # positions with many captures / tension
+      threat: 0.4        # moves that create threats
+      forcing: 0.3       # checks, captures, threats
+      sacrifice: 0.4
+      even_trade: -0.6   # avoid simple trades
+      queen_trade: -1.0  # keep the queens on
+
+brilliant:             # Tal mode: always go for sacrifices that keep the position at least equal
+  enabled: false
+  chance: 1.0          # Tal show: always (real Tal took 43% of available sound sacrifices)
+  min_eval_cp: -60     # sacrifice whenever the position stays about equal (-0.6 or better): always played
+  min_prob: 0.003      # brilliant hunting: also hidden moves (Maia gives 0.3%+)
+  candidates: 30       # look at Maia's 30 most natural moves for sacrifices
+  count_offers: true   # also pieces left en prise (chess.com counts those as brilliant too)
+  prefer_within_cp: 50 # prefer sacrifices within 0.5 pawns of the best move (that's what chess.com marks brilliant)
+  depth: 10           # a bit shallower so checking 30 moves stays fast
+  speculative: true    # also Tal's speculative sacrifices: objectively a bit worse, but they create an attack
+  spec_min_eval_cp: -250   # Tal mode: position after a speculative sacrifice may be up to -2.5
+  spec_chance: 1.0     # Tal takes over: always go for a speculative sacrifice when one is there
+  max_cost_cp: 300     # Tal mode: a sacrifice may cost up to 3 pawns compared with the best natural move
+  sound_max_cost_cp: 150 # "about equal" sacrifices count as sound only if they cost at most 1.5 pawns vs the best move
+  spec_free_cost_cp: 150 # speculative sacrifices costing at most 1.5 pawns are allowed even without a direct king attack
+  tal_motifs: true     # speculative sacrifices also allowed when they are a favourite motif
+  motifs_file: tal/brilliant-motifs.json  # Tal + 21 attacking players (Morphy, Keres, Nezhmetdinov, Spielmann, ...)
+  max_eval_cp: 1500    # brilliants also when already winning (chess.com marks those too)
+  min_now_cp: -400     # also sacrifice for counterplay when worse (Tal's practical chances)
+
+human_check:           # v5.1: blunder check like a strong human, WITHOUT Stockfish (Maia's own feel)
+  enabled: true
+  replies: 6           # look at the opponent's 6 most natural replies to the chosen move
+  ok_above: 0.35       # if our winning chances stay above 35% against all of them, play the move
+  alternatives: 4      # otherwise compare with Maia's 4 most natural other moves
+  min_gain: 0.2        # switch only if another move is clearly safer (+20% winning chances)
+  min_clock_seconds: 20
+  static_first: true   # v5.2: instant "loose pieces" scan; only if it smells a tactic, look 2 moves deep (Maia)
+  deep_ok_above: 0.25  # blunder check only stops really bad blunders (more human mistakes get through)
+
+maia_sacrifices:       # v5.2: Tal's sacrifices WITHOUT Stockfish, judged by Maia's own feel
+  enabled: true
+  candidates: 20       # Maia's 20 most natural moves
+  min_prob: 0.03       # only sacrifices a strong human would actually consider (3%+)
+  max_checks: 4        # check at most 4 sacrifices per move (keeps it fast)
+  replies: 5
+  sound_above: 0.52    # after the opponent's best natural reply Maia still gives us 52%+: play it (always)
+  spec_above: 0.42     # 42-52%: speculative, Tal-style
+  chance: 1.0
+  spec_chance: 0.5
+  min_clock_seconds: 30
+
+guard:                 # Stockfish blunder guard. Maia still chooses every move.
+  enabled: false        # true = ON, false = OFF (applies mid-game within ~30 s)
+  playable_cp: -150    # only check moves when the position is at least this good for the bot
+  lost_cp: -500        # Tal mode: veto only real disasters that leave the bot clearly lost (-5)...
+  min_drop_cp: 600     # ...and cost 6+ pawns (hanging the queen etc.); mates are always blocked
+  winning_cp: 150      # when the bot is winning (+1.5 or more)...
+  winning_floor_cp: -300 # Tal mode: a winning position may even turn worse, for the sake of the attack
+  depth: 14            # Stockfish search depth for the check
+  replace_with: softer_mistake  # softer_mistake = play a smaller mistake instead; maia_next = Maia's next safe move
+  softer_drop_cp: 300  # the smaller mistake aims ~3 pawns below the position before...
+  softer_target_cp: 0  # ...but at most "equal" (0), so a winning position becomes about equal
+  min_clock_seconds: 15  # skip the check when the bot's clock is lower than this
+  late:                # from move 30: looser, like a human grandmaster who sometimes spoils a won game
+    start_move: 30
+    winning_floor_cp: -300 # same as the Tal-mode guard above (late game no stricter than early)
+    lost_cp: -500
+    min_drop_cp: 600
+
+challenges:
+  variants: [standard]
+  min_base_seconds: 180   # 3+0 minimum
+  max_base_seconds: 900   # 15 min maximum
+  max_increment: 10
+  accept_unlimited: true  # games without a clock
+  accept_rated: true
+  accept_casual: true
+  accept_humans: true
+  accept_bots: false     # only humans who challenge it
+  max_games: 1            # games at the same time
+
+session:
+  stop_accepting_minutes_before_end: 20
+
+openings:
+  # Attacking repertoire for the Tal profile (open, sharp positions). weight 0 = only as fallback.
+  white:
+    open_sicilian:   {weight: 100, line: "e2e4 c7c5 g1f3 * d2d4", budget: 700}
+    scotch:          {weight: 100, line: "e2e4 e7e5 g1f3 b8c6 d2d4", budget: 400}
+    french_nc3:      {weight: 100, line: "e2e4 e7e6 d2d4 d7d5 b1c3", budget: 400}
+    caro_advance:    {weight: 100, line: "e2e4 c7c6 d2d4 d7d5 e4e5", budget: 300}
+    pirc_150_attack: {weight: 100, line: "e2e4 d7d6 d2d4 g8f6 b1c3 g7g6 c1e3", budget: 200}
+    e4_other:        {weight: 0, line: "e2e4", budget: 150}
+  black:
+    sicilian:        {weight: 100, line: "e2e4 c7c5", budget: 800}
+    modern_benoni:   {weight: 100, line: "d2d4 g8f6 c2c4 c7c5 d4d5 e7e6", budget: 500}
+    kings_indian:    {weight: 100, line: "d2d4 g8f6 * g7g6 * f8g7 * d7d6", budget: 400}
+    kid_vs_c4:       {weight: 100, line: "c2c4 g8f6 * g7g6 * f8g7", budget: 200}
+    kid_vs_nf3:      {weight: 100, line: "g1f3 g8f6 * g7g6 * f8g7", budget: 200}
+  book:
+    enabled: true
+    path: book-tal-rep.json   # attacking repertoire built from 2400+ games (Tal's own book: book-tal.json)
+
+matchmaking:           # when idle, challenge other Lichess bots (to measure the real rating)
+  enabled: false
+  rated: true
+  speed: blitz
+  limit: 180           # 3+2
+  increment: 2
+  min_rating: 1900
+  max_rating: 2700
+  idle_seconds: 60
+  exclude: []
+
