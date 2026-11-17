@@ -29,7 +29,7 @@ def sample_positions(n, rng):
     data = requests.get(url, timeout=600).content
     with zipfile.ZipFile(io.BytesIO(data)) as z:
         text = z.read(z.namelist()[0]).decode("utf-8", "ignore")
-    games = [g for g in games_from_pgn(text) if len(g) >= 30]
+    games = [g for g, _ in games_from_pgn(text) if len(g) >= 30]
     rng.shuffle(games)
     out = []
     for sans in games:
