@@ -80,7 +80,7 @@ tal_rules2:            # rules fitted on 46,000 Tal positions (v5: Tal traits + 
   file: tal/tal-rules2.json
   candidates: 10       # only Maia's 10 most natural moves are considered (stays human)
   temperature: 1.0     # sampling between Tal-scored moves (tuned to strong humans: more small inaccuracies)
-  tal_traits_boost: 1.7  # Tal style: attack, complications, sacrifices count 1.7x
+  tal_traits_boost: 2.0  # Tal style: attack, complications, sacrifices count 2x
   depth: 12
   stockfish_weight: 0.3  # weight of Maia's own position judgement (tuned to strong humans)
   lapse_chance: 0.28   # base: 28% of moves without the quality check (tuned to strong humans)
@@ -101,7 +101,7 @@ tal_rules2:            # rules fitted on 46,000 Tal positions (v5: Tal traits + 
   min_clock_seconds: 60  # under 1 minute left: plays on instinct only (more time-pressure mistakes)
   complicate_when_worse:   # Tal's practical chances: when worse, make it messy instead of defending passively
     enabled: true
-    below_cp: 100        # seek complications unless clearly better (+1.0 or more)
+    below_cp: 200        # seek complications unless clearly winning (+2.0 or more)
     stockfish_factor: 0.6  # Stockfish's verdict counts less then (accepts slightly weaker but trickier moves)
     max_extra_loss_cp: 150 # but the bonus only goes to moves at most 1.5 pawns below the best natural move
     bonus:
@@ -149,9 +149,9 @@ maia_sacrifices:       # v5.2: Tal's sacrifices WITHOUT Stockfish, judged by Mai
   max_checks: 4        # check at most 4 sacrifices per move (keeps it fast)
   replies: 5
   sound_above: 0.52    # after the opponent's best natural reply Maia still gives us 52%+: play it (always)
-  spec_above: 0.42     # 42-52%: speculative, Tal-style
+  spec_above: 0.40     # 40-52%: speculative, Tal-style
   chance: 1.0
-  spec_chance: 0.5
+  spec_chance: 0.7
   deep_check: true     # v6: calculate 2 moves deep with Maia before sacrificing (their reply, our answer)
   deep_bonus: 0.05
   min_clock_seconds: 30
@@ -209,17 +209,17 @@ adapt:                 # v6: reads the opponent from their moves only (never the
   low_clock_seconds: 60  # opponent under 1 minute: treat as shaky (make it messy)
   shaky:               # against a shaky opponent: Tal goes for it
     tal_rules2:
-      tal_traits_boost: 2.2
-      complicate_when_worse: {below_cp: 250}
+      tal_traits_boost: 2.5
+      complicate_when_worse: {below_cp: 300}
     maia_sacrifices:
-      spec_chance: 0.85
-      spec_above: 0.38
-  precise:             # against a precise opponent: sound play, wait for the moment
+      spec_chance: 0.9
+      spec_above: 0.37
+  precise:             # against a precise opponent: still Tal, only slightly more careful
     tal_rules2:
-      tal_traits_boost: 1.2
+      tal_traits_boost: 1.8
     maia_sacrifices:
-      spec_chance: 0.2
-      spec_above: 0.46
+      spec_chance: 0.55
+      spec_above: 0.42
 
 guard:                 # Stockfish blunder guard. Maia still chooses every move.
   enabled: false        # true = ON, false = OFF (applies mid-game within ~30 s)
