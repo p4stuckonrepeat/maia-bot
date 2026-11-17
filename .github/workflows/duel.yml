@@ -1,0 +1,55 @@
+name: "Duel: two bot versions head-to-head"
+on:
+  workflow_dispatch:
+    inputs:
+      code_ref:
+        description: "Branch with tools/duel.py and both configs"
+        default: "live-tal-v5"
+      a:
+        default: "config-tal.yml"
+      b:
+        default: "config-tal-v43.yml"
+      names:
+        default: "v5,v4.3"
+      games:
+        description: "Games per machine (6 machines)"
+        default: "4"
+permissions:
+  contents: read
+jobs:
+  duel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.code_ref }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: maia3-79m
+      - name: Install
+        run: |
+          sudo apt-get update && sudo apt-get install -y stockfish
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt git+https://github.com/CSSLab/maia3@1e13597c42d4858b7cfd7cfdae01e297263364b2
+          maia3-cache --model maia3-79m
+      - name: Get model
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download tal-live-v1 -p tal-79m.pt
+      - name: Duel
+        env:
+          DUEL_A: ${{ inputs.a }}
+          DUEL_B: ${{ inputs.b }}
+          DUEL_NAMES: ${{ inputs.names }}
+          DUEL_GAMES: ${{ inputs.games }}
+          DUEL_SHARD: ${{ matrix.shard }}
+        run: python -u -m tools.duel
