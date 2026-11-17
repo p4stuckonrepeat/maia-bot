@@ -7,6 +7,7 @@ CURVE_MODE=compare: merges curve-*.json into a comparison table (curve-report.md
 Analysis (Stockfish, depth CURVE_DEPTH): for every move of the tracked player, the loss in centipawns,
 whether it was Stockfish's top move, and the situation (move number, equal/ahead/behind, sharp/quiet).
 """
+import collections
 import glob
 import io
 import json
@@ -41,6 +42,28 @@ def is_sac(board, move, reply):
     b.push(reply)
     back = VAL[att.piece_type] if b.attackers(p.color, move.to_square) else 0
     return VAL[p.piece_type] - cap - back >= 2
+
+
+def phase_of(board):
+    """Opening / middlegame / endgame (like chess.com's phase split)."""
+    if board.fullmove_number <= 12:
+        return "opening"
+    mat = sum(VAL[p.piece_type] for p in board.piece_map().values() if p.piece_type not in (chess.PAWN, chess.KING))
+    return "endgame" if mat <= 20 else "middlegame"
+
+
+CLASSES = [("best", 0.0), ("excellent", 0.02), ("good", 0.05), ("inaccuracy", 0.10), ("mistake", 0.20), ("blunder", 1.01)]
+
+
+def classify(r):
+    """chess.com's move classes by lost expected points (published thresholds)."""
+    ep = max(0.0, (r["wb"] - r["wa"]) / 100)
+    if r.get("top"):
+        return "best"
+    for name, lim in CLASSES[1:]:
+        if ep <= lim:
+            return name
+    return "blunder"
 
 
 def win_pct(cp):
@@ -101,6 +124,7 @@ def analyse(games, out_name):
                     after = -evals[i + 1][0]
                     if abs(before) <= 1000:
                         rows.append({"game": f"{out_name}:{gi}", "wb": win_pct(before), "wa": win_pct(after),
+                                     "phase": phase_of(b),
                                      "move": b.fullmove_number, "loss": max(0, min(500, before - after)),
                                      "top": m == best, "eval": before, "sac": sac,
                                      "brill": sac and before - after <= 20 and after >= -100,
@@ -290,6 +314,26 @@ def compare():
           f"| brilliant-like per game | {hs['brilliant_like'] / max(1, hs['games']):.2f} | {bs['brilliant_like'] / max(1, bs['games']):.2f} |",
           f"| total (sacrifices / brilliant-like / games) | {hs['sacrifices']} / {hs['brilliant_like']} / {hs['games']} | {bs['sacrifices']} / {bs['brilliant_like']} / {bs['games']} |",
           f"| bot moves chosen by the sacrifice hunter | - | {sum(1 for r in sets.get('bot', []) if r.get('hunter'))} |"]
+    # chess.com-style move classification per 100 moves, and accuracy by phase
+    L += ["", "## Move classification (chess.com thresholds: lost expected points), per 100 moves", "",
+          "| Class | Humans 2300-2600 | Bot |", "|---|---|---|"]
+    cls = {}
+    for who in ("human", "bot"):
+        rs = [r for r in sets.get(who, []) if "wb" in r]
+        cnt = collections.Counter(classify(r) for r in rs)
+        cls[who] = {k: 100 * cnt[k] / max(1, len(rs)) for k, _ in CLASSES}
+    for k, _ in CLASSES:
+        L.append(f"| {k} | {cls['human'][k]:.1f} | {cls['bot'][k]:.1f} |")
+    out["classes"] = cls
+    L += ["", "## Accuracy by phase (Lichess formula, average per move)", "",
+          "| Phase | Humans | Bot | moves (h/b) |", "|---|---|---|---|"]
+    for ph in ("opening", "middlegame", "endgame"):
+        vals = {}
+        for who in ("human", "bot"):
+            rs = [r for r in sets.get(who, []) if r.get("phase") == ph and "wb" in r]
+            vals[who] = (statistics.mean(move_accuracy(r["wb"], r["wa"]) for r in rs) if rs else 0, len(rs))
+        L.append(f"| {ph} | {vals['human'][0]:.1f}% | {vals['bot'][0]:.1f}% | {vals['human'][1]}/{vals['bot'][1]} |")
+        out[f"phase_{ph}"] = {"human": vals["human"][0], "bot": vals["bot"][0]}
     ga_h, ga_b = game_accuracies(sets.get("human", [])), game_accuracies(sets.get("bot", []))
     if ga_h and ga_b:
         q = lambda xs, p: sorted(xs)[min(len(xs) - 1, int(p * len(xs)))]
