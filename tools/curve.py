@@ -24,6 +24,25 @@ GAMES = int(os.environ.get("CURVE_GAMES", "8"))
 BUCKETS = [(1, 10), (11, 20), (21, 30), (31, 40), (41, 999)]
 
 
+VAL = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9, chess.KING: 0}
+
+
+def is_sac(board, move, reply):
+    """Piece sacrifice: a knight or more is left where the opponent's best reply takes it, losing 2+ points."""
+    p = board.piece_at(move.from_square)
+    if p is None or p.piece_type in (chess.PAWN, chess.KING) or reply is None or reply.to_square != move.to_square:
+        return False
+    b = board.copy(stack=False)
+    cap = VAL[b.piece_type_at(move.to_square)] if b.piece_type_at(move.to_square) else 0
+    b.push(move)
+    att = b.piece_at(reply.from_square)
+    if att is None:
+        return False
+    b.push(reply)
+    back = VAL[att.piece_type] if b.attackers(p.color, move.to_square) else 0
+    return VAL[p.piece_type] - cap - back >= 2
+
+
 def win_pct(cp):
     """Lichess' public win-percentage formula."""
     import math
@@ -66,14 +85,20 @@ def analyse(games, out_name):
                     break
                 b.push(m)
             b = g.board()
+            node = g
             for i, m in enumerate(moves):
+                node = node.variations[0] if node.variations else node
                 if b.turn in colors:
+                    sac = is_sac(b, m, evals[i + 1][1])
+                    note = node.comment or ""
                     before, best = evals[i]
                     after = -evals[i + 1][0]
                     if abs(before) <= 1000:
                         rows.append({"game": f"{out_name}:{gi}", "wb": win_pct(before), "wa": win_pct(after),
                                      "move": b.fullmove_number, "loss": max(0, min(500, before - after)),
-                                     "top": m == best, "eval": before,
+                                     "top": m == best, "eval": before, "sac": sac,
+                                     "brill": sac and before - after <= 20 and after >= -100,
+                                     "hunter": "sacrifice:" in note,
                                      "sharp": sum(1 for x in b.legal_moves if b.is_capture(x)) >= 3})
                 b.push(m)
             if gi % 20 == 0:
@@ -170,6 +195,20 @@ def compare():
             out[label] = {"human": h, "bot": b}
             L.append(f"| {label} | {h[0]:.0f} | {b[0]:.0f} | {h[1]:.0%} | {b[1]:.0%} | {h[2]:.1%} | {b[2]:.1%} | "
                      f"{h[3]:.1%} | {b[3]:.1%} | {h[4]}/{b[4]} |")
+    for who in ("human", "bot"):
+        rs = sets.get(who, [])
+        games = len({r.get("game") for r in rs})
+        n_sac = sum(1 for r in rs if r.get("sac"))
+        n_br = sum(1 for r in rs if r.get("brill"))
+        out[f"sacrifices_{who}"] = {"games": games, "sacrifices": n_sac, "brilliant_like": n_br}
+    hs, bs = out["sacrifices_human"], out["sacrifices_bot"]
+    L += ["", "## Sacrifices (piece left to be taken, 2+ points down) and brilliant-like ones",
+          "Brilliant-like = a sacrifice that is the best move or within 0.2 pawns, and the position stays OK (chess.com's idea of !!).", "",
+          "| | Humans 2300-2600 | Bot |", "|---|---|---|",
+          f"| sacrifices per game | {hs['sacrifices'] / max(1, hs['games']):.2f} | {bs['sacrifices'] / max(1, bs['games']):.2f} |",
+          f"| brilliant-like per game | {hs['brilliant_like'] / max(1, hs['games']):.2f} | {bs['brilliant_like'] / max(1, bs['games']):.2f} |",
+          f"| total (sacrifices / brilliant-like / games) | {hs['sacrifices']} / {hs['brilliant_like']} / {hs['games']} | {bs['sacrifices']} / {bs['brilliant_like']} / {bs['games']} |",
+          f"| bot moves chosen by the sacrifice hunter | - | {sum(1 for r in sets.get('bot', []) if r.get('hunter'))} |"]
     ga_h, ga_b = game_accuracies(sets.get("human", [])), game_accuracies(sets.get("bot", []))
     if ga_h and ga_b:
         q = lambda xs, p: sorted(xs)[min(len(xs) - 1, int(p * len(xs)))]
