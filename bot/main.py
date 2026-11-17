@@ -333,6 +333,17 @@ class Bot:
             return move, calc_note, None, top_prob
         notes = [calc_note] if calc_note else []
         rcfg = self._adapt(self.cfg.get("tal_rules2", {}), "tal_rules2", level)
+        extra = 0.0
+        hm = self.cfg.get("human_misses", {})
+        if hm.get("enabled"):
+            f = getattr(self, "forms", {}).get(gid, {})
+            if f.get("last_drop", 0) >= float(hm.get("opp_mistake_drop", 0.15)):
+                extra += float(hm.get("miss_extra", 0.25))      # humans often miss the opponent's mistake
+            mat = sum({2: 3, 3: 3, 4: 5, 5: 9}.get(p.piece_type, 0) for p in board.piece_map().values())
+            if mat <= int(hm.get("endgame_material", 20)):
+                extra += float(hm.get("endgame_extra", 0.1))    # endgames: humans are less exact than engines
+        if extra:
+            rcfg = {**rcfg, "lapse_chance": float(rcfg.get("lapse_chance", 0)) + extra}
         lapse = (not rcfg.get("human_curve", {}).get("enabled")) and \
             random.random() < float(rcfg.get("lapse_chance", 0))   # a moment of human inattention
         if rcfg.get("enabled") and not lapse and (clock is None or clock > rcfg.get("min_clock_seconds", 40) * 1000):
@@ -418,6 +429,7 @@ class Bot:
                     mine = next((ex(c) for c in cands if c["move"] == last), None)
                     drop = (best - mine) if mine is not None else float(acfg.get("unknown_drop", 0.08))
                     f["drops"] = (f["drops"] + [max(0.0, drop)])[-int(acfg.get("window", 8)):]
+                    f["last_drop"] = max(0.0, drop)
         opp_clock = state.get("btime" if color == chess.WHITE else "wtime")
         if opp_clock is not None and opp_clock < float(acfg.get("low_clock_seconds", 60)) * 1000:
             return "shaky"

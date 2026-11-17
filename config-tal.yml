@@ -175,6 +175,13 @@ critical_calc:         # v6: real calculation with Maia only (Leela-style, no St
   min_visits: 3
   natural_visits: 8
 
+human_misses:          # v6 tune: human traits measured on 500 games of 2300-2600 players
+  enabled: true
+  opp_mistake_drop: 0.15 # after an opponent mistake (lost 15%+ winning chances)...
+  miss_extra: 0.25     # ...25% more instinct moves: like humans, it sometimes misses the chance
+  endgame_material: 20 # endgame = 20 points of pieces or less (both sides)
+  endgame_extra: 0.1   # endgames a bit less exact
+
 human_touches:         # v6
   enabled: true
   sacrifice_think: [8, 20]  # "Tal sits, then sacrifices": 8-20 s before a sacrifice (max 8% of the clock)
