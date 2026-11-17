@@ -79,10 +79,10 @@ tal_rules2:            # rules fitted on 46,000 Tal positions (v5: Tal traits + 
   no_stockfish: true   # v5: Stockfish completely off        # (Tal was much more accurate than the model: 17 vs 29 cp average loss)
   file: tal/tal-rules2.json
   candidates: 10       # only Maia's 10 most natural moves are considered (stays human)
-  temperature: 0.85    # sampling between Tal-scored moves (tuned to strong humans)
+  temperature: 1.0     # sampling between Tal-scored moves (tuned to strong humans: more small inaccuracies)
   tal_traits_boost: 1.7  # Tal style: attack, complications, sacrifices count 1.7x
   depth: 12
-  stockfish_weight: 0.4  # v5.x: weight of Maia's own position judgement (lower = wilder, more mistakes)
+  stockfish_weight: 0.3  # weight of Maia's own position judgement (tuned to strong humans)
   lapse_chance: 0.28   # base: 28% of moves without the quality check (tuned to strong humans)
   human_curve:         # measured on 250 games of 2300-2600 players (Lichess Elite Database)
     enabled: true
