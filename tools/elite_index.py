@@ -33,29 +33,34 @@ def month_urls(n):
 
 
 def games_from_pgn(text):
-    """Yield the first MAX_PLY SAN moves of each game."""
-    moves = []
+    """Yield (first MAX_PLY SAN moves, result) of each game."""
+    moves, result = [], "*"
     for line in text.splitlines():
         if line.startswith("["):
             if moves:
-                yield moves
-                moves = []
+                yield moves, result
+                moves, result = [], "*"
+            if line.startswith("[Result "):
+                result = line.split('"')[1] if '"' in line else "*"
             continue
         if line.strip() and len(moves) < MAX_PLY:
             moves.extend(t.rstrip("!?") for t in TOKEN_RE.sub(" ", line).split()[: MAX_PLY - len(moves)])
     if moves:
-        yield moves
+        yield moves, result
 
 
 def count_chunk(games):
     counts = defaultdict(Counter)
-    for sans in games:
+    for sans, result in games:
         board = chess.Board()
+        decisive = result in ("1-0", "0-1")
         try:
             for san in sans:
                 k = key(board)
                 mv = board.push_san(san)
                 counts[k][mv.uci()] += 1
+                if decisive:
+                    counts[k][mv.uci() + "|d"] += 1   # decisive games (for a sharp repertoire)
         except ValueError:
             continue
     return counts

@@ -15,6 +15,9 @@ on:
       out:
         description: "Output book file"
         default: "book.json"
+      sharp:
+        description: "Prefer lines with decisive games (0 = off, 1 = strong)"
+        default: "0"
 permissions:
   contents: write
 jobs:
@@ -37,6 +40,7 @@ jobs:
           BOOK_BUDGET_SCALE: ${{ inputs.test && '0.02' || '1' }}
           BOOK_CONFIG: ${{ inputs.config }}
           BOOK_OUT: ${{ inputs.out }}
+          BOOK_SHARP: ${{ inputs.sharp }}
         run: python -u -m tools.build_book
       - uses: actions/upload-artifact@v4
         with:

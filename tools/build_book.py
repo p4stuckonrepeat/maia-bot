@@ -40,6 +40,8 @@ def key(board):
 
 
 TABLE = None  # filled from the Elite Database when SOURCE == "elite"
+DECISIVE = {}  # position -> {move: decisive games}
+SHARP = float(os.environ.get("BOOK_SHARP", "0"))  # >0: prefer our moves that lead to decisive games (sharp lines)
 
 
 def explore(board):
@@ -49,7 +51,9 @@ def explore(board):
         return cache[k]
     if TABLE is not None:
         c = TABLE.get(k)
-        moves = sorted(c.items(), key=lambda x: -x[1]) if c else []
+        moves = sorted([(u, n) for u, n in c.items() if "|" not in u], key=lambda x: -x[1]) if c else []
+        if c:
+            DECISIVE[k] = {u: c.get(u + "|d", 0) for u, _ in moves}
         cache[k] = (sum(n for _, n in moves), moves)
         return cache[k]
     for attempt in range(8):
@@ -134,6 +138,11 @@ def build(name, spec, color, sf):
             scores = {m: evaluate(sf, board, m, color) for m, _ in pool}
             best = max(scores.values())
             keep = [(m, g) for m, g in pool if best - scores[m] <= MAX_LOSS_CP]
+            if SHARP > 0 and DECISIVE.get(key(board)):
+                dec = DECISIVE[key(board)]
+                tot = sum(g for _, g in keep) or 1
+                avg = (sum(dec.get(m, 0) for m, _ in keep) / tot) or 0.5
+                keep = [(m, max(1, int(g * ((dec.get(m, 0) / max(g, 1)) / avg) ** SHARP))) for m, g in keep]
             book[key(board)] = [[m, g] for m, g in keep]
             children = keep
         else:
