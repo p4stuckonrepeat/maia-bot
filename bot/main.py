@@ -259,10 +259,10 @@ class Bot:
         base = float(vc.get("minutes", 10)) * 60000
         c = self.vclocks.setdefault(gid, {"mine": base, "opp": base, "color": color, "last": time.time(),
                                           "turn": board.turn})
-        if board.turn == color and c["turn"] != color:          # opponent just moved: charge their time
-            c["opp"] = max(1000.0, c["opp"] - (time.time() - c["last"]) * 1000 + float(vc.get("increment", 0)) * 1000)
         c["turn"] = board.turn
-        mine, opp = c["mine"], c["opp"]
+        # the opponent's virtual clock mirrors ours: people think long in unlimited games, which must not
+        # look like time trouble (that would switch on "shaky opponent" and blitz mode)
+        mine, opp = c["mine"], c["mine"]
         wk, bk = ("w", "b") if color == chess.WHITE else ("b", "w")
         return {**state, f"{wk}time": int(mine), f"{bk}time": int(opp),
                 f"{wk}inc": int(float(vc.get("increment", 0)) * 1000), f"{bk}inc": int(float(vc.get("increment", 0)) * 1000)}
