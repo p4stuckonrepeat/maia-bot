@@ -54,12 +54,16 @@ class Book:
             else:
                 name = random.choice(fits)  # fallback opening: only because no main one fits
             st["opening"] = name
+        min_games = float(ocfg.get("book", {}).get("min_games", 0))   # own book: skip moves played only once or twice
         entries = [(m, w) for m, w in self.openings[name]["positions"][k]
-                   if chess.Move.from_uci(m) in board.legal_moves]
+                   if chess.Move.from_uci(m) in board.legal_moves and w >= min_games]
         if not entries:
             st["out"] = True
             return None, None
-        m = random.choices([e[0] for e in entries], weights=[e[1] for e in entries])[0]
+        if ocfg.get("book", {}).get("pick") == "top":    # always the player's most played move: one consistent repertoire
+            m = max(entries, key=lambda e: e[1])[0]
+        else:
+            m = random.choices([e[0] for e in entries], weights=[e[1] for e in entries])[0]
         return chess.Move.from_uci(m), name
 
     def end(self, gid):

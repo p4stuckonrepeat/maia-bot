@@ -172,6 +172,7 @@ class Bot:
     def play_game(self, gid):
         color, opp, opp_rating, sent_ply, finished = None, "?", None, -1, False
         vetoes, book_moves, last_opening = 0, 0, None
+        base_ms = None
         failures = 0
         log(f"[{gid}] game started")
         try:
@@ -192,6 +193,7 @@ class Bot:
                                 self.api._req("POST", f"/api/bot/game/{gid}/resign")
                                 return
                             state = ev["state"]
+                            base_ms = (ev.get("clock") or {}).get("initial")
                         elif t == "gameState" and color is not None:
                             state = ev
                         else:
@@ -213,7 +215,7 @@ class Bot:
                             think = think_seconds(state.get(f"{mine}time"), state.get(f"{mine}inc"),
                                                   len(moves), top_prob, board.legal_moves.count(),
                                                   opening is not None, self.cfg.get("timing", {}),
-                                                  board=board, move=move)
+                                                  board=board, move=move, base_ms=base_ms)
                             wait = think - (time.time() - t0)
                             if wait > 0:
                                 time.sleep(wait)
