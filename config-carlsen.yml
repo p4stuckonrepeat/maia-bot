@@ -9,7 +9,7 @@ maia:
   oppo_elo: 2600       # opponent rating Maia assumes; "opponent" = real rating (plays sloppier vs weak players)
 
 search:                # light human-like calculation with Maia's own judgement (no Stockfish)
-  enabled: false
+  enabled: true        # measured on Carlsen's games: 62.5% his exact move vs 61.3% without (depth 1, margin 0.10, 4 candidates)
   candidates: 4        # natural moves considered (Maia's most likely)
   depth: 1             # 1 = check the opponent's likely replies; 2 = also our answer (slower)
   widths: [3, 2]       # replies considered at each level
