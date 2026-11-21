@@ -1,4 +1,4 @@
-# CARLSEN PROFILE: plays as close to Magnus Carlsen as we can measure. Maia-3 Lichess bot settings. Edit on github.com; most changes apply within ~30 s, even mid-session.
+# CARLSEN PROFILE (pure): plays as close to Magnus Carlsen as we can measure, no Stockfish anywhere. Maia-3 Lichess bot settings. Edit on github.com; most changes apply within ~30 s, even mid-session.
 
 maia:
   model: maia3-79m     # (model change needs a restart)
@@ -43,7 +43,7 @@ timing:                # Carlsen's real thinking times, measured from ~7,000 of 
   # safety net: under 30 s on the clock it plays fast so it never loses on time
 
 assist:                # quality filter: only between Maia's own natural candidate moves
-  enabled: true         # stops clearly worse choices when a natural alternative is much better
+  enabled: false        # PURE CARLSEN: no Stockfish filter         # stops clearly worse choices when a natural alternative is much better
   only_when_not_top: false # also checks Maia's own first choice (with more freedom, below)
   max_loss_cp: 80      # Carlsen is very precise: allowed gap to the best natural candidate (80 = 0.8 pawns)
   top_max_loss_cp: 120 # Maia's own first choice may be up to 1.2 pawns worse (keeps human inaccuracies)
@@ -51,7 +51,7 @@ assist:                # quality filter: only between Maia's own natural candida
   depth: 12            # the replacement is picked at random among the OK candidates, weighted by Maia
 
 guard:                 # Stockfish blunder guard. Maia still chooses every move.
-  enabled: true        # true = ON, false = OFF (applies mid-game within ~30 s)
+  enabled: false       # PURE CARLSEN: no Stockfish guard. true = ON, false = OFF (applies mid-game within ~30 s)
   playable_cp: -150    # only check moves when the position is at least this good for the bot
   lost_cp: -250        # veto a move only if it leaves the bot at this evaluation or worse...
   min_drop_cp: 300     # ...and it costs at least this much
