@@ -21,6 +21,9 @@ on:
         default: "8"
       lr:
         default: "5e-6"
+      tune_only:
+        description: "tune mode: temperature | human | all"
+        default: "human"
       max_minutes:
         description: "Hard limit: the GPU is shut down after this many minutes no matter what"
         default: "150"
@@ -154,7 +157,7 @@ jobs:
       - run: echo "STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
       - name: Start GPU
         run: |
-          echo "POD=$(python3 tools/runpod.py start ${{ inputs.name }}-tune PLAN_MODE=tune TUNE_ONLY=temperature PLAYER_NAME=${{ inputs.name }} GAMES_ASSET=${{ inputs.name }}-games.pgn.gz \
+          echo "POD=$(python3 tools/runpod.py start ${{ inputs.name }}-tune PLAN_MODE=tune TUNE_ONLY=${{ inputs.tune_only }} PLAYER_NAME=${{ inputs.name }} GAMES_ASSET=${{ inputs.name }}-games.pgn.gz \
             "PLAYER=${{ inputs.player }}" PLAYER_MAX_GAMES=0)" >> "$GITHUB_ENV"
       - name: Wait
         run: python3 tools/runpod.py wait "$POD" tal-runs ${{ inputs.name }}-tune.json ${{ inputs.max_minutes }}

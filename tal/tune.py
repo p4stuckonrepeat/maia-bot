@@ -66,7 +66,11 @@ def timed_games(text):
             if prev is not None:
                 spent[ply] = max(0.0, prev - clocks[ply] + inc)
             prev = clocks[ply]
-        out.append({"moves": moves, "color": color, "spent": spent, "base": base, "inc": inc})
+        opp_elo = g.headers.get("BlackElo" if color == chess.WHITE else "WhiteElo", "")
+        out.append({"moves": moves, "color": color, "spent": spent, "base": base, "inc": inc,
+                    "clock": {p: clocks[p - 1] if p > 0 else base for p in range(start, len(moves), 2)},
+                    "own_clock": {p: (clocks[p - 2] if p >= 2 else base) for p in range(start, len(moves), 2)},
+                    "opp_elo": int(opp_elo) if opp_elo.isdigit() else None})
     return out
 
 
@@ -88,6 +92,68 @@ def category(board, move, top_prob, from_book):
     if top_prob >= 0.45:
         return "normal"
     return "hard"
+
+
+def human(eng, w, hold, text, out):
+    """Human effects on held-out online games: (a) time trouble, (b) opponent strength, (c) quick vs slow moves."""
+    from tal.imitate import features
+    held = {tuple(g["moves"]) for g in hold}
+    tg = [g for g in timed_games(text) if tuple(g["moves"]) in held and 150 <= g["base"] + 40 * g["inc"] <= 300]
+    items = [(g, p) for g in tg for p in g["spent"] if p >= 8]
+    random.Random(2).shuffle(items)
+    items = items[:int(os.environ.get("TUNE_HUMAN_POSITIONS", "4000"))]
+    log(f"human: {len(tg)} held-out timed games, {len(items)} positions")
+    Ts = [0.8, 1.0, 1.2, 1.4, 1.6, 1.9, 2.3, 2.8]
+    by_clock, by_spent, by_opp = {}, {}, {}
+    opp_test = {"oppo 2600": [], "oppo = real rating": []}
+
+    def logits_of(b, top):
+        return torch.tensor([float(torch.tensor(features(b, c["move"], c["policy"], (c["wdl"][0] + 0.5 * c["wdl"][1]) / 1000)) @ w)
+                             for c in top])
+
+    for n, (g, p) in enumerate(items):
+        b = chess.Board()
+        for m in g["moves"][:p]:
+            b.push_uci(m)
+        real = g["moves"][p]
+        top = candidates(eng, b)
+        idx = next((i for i, c in enumerate(top) if c["move"].uci() == real), -1)
+        if idx < 0:
+            continue
+        lg = logits_of(b, top)
+        clk = g["own_clock"][p]
+        if clk is None:
+            continue
+        cb = ">90s" if clk > 90 else "30-90s" if clk > 30 else "10-30s" if clk > 10 else "<10s"
+        sp = g["spent"][p]
+        sb = "<1s" if sp < 1 else "1-3s" if sp < 3 else "3-10s" if sp < 10 else ">10s"
+        for bucket, d in ((cb, by_clock), (sb, by_spent)):
+            d.setdefault(bucket, []).append((lg, idx))
+        if g["opp_elo"] and n % 2 == 0:
+            e = eng
+            e.self_elo, e.oppo_elo = 2600, int(min(2600, max(600, g["opp_elo"] - 400)))   # online ~400 above Lichess-Maia scale
+            e.multipv = len(top)
+            mv = " ".join(m.uci() for m in b.move_stack)
+            e.cmd_position("position startpos" + (f" moves {mv}" if mv else ""))
+            _, top2 = e.score_moves()
+            i2 = next((i for i, c in enumerate(top2) if c["move"].uci() == real), -1)
+            if i2 >= 0:
+                opp_test["oppo 2600"].append((lg, idx))
+                opp_test["oppo = real rating"].append((logits_of(b, top2), i2))
+            by_opp.setdefault("<2400" if g["opp_elo"] < 2400 else "2400-2800" if g["opp_elo"] < 2800 else ">2800", []).append((lg, idx))
+        if n % 500 == 0:
+            log(f"  human {n}/{len(items)}")
+
+    def fit(rows):
+        g = {T: sum(-torch.log_softmax(l / T, 0)[y].item() for l, y in rows) / len(rows) for T in Ts}
+        top1 = sum(int(l.argmax()) == y for l, y in rows) / len(rows)
+        return {"n": len(rows), "best_T": min(g, key=g.get), "top_move_share": round(top1, 3),
+                "logloss": {k: round(v, 4) for k, v in g.items()}}
+    out["human"] = {"by_own_clock": {k: fit(v) for k, v in by_clock.items() if len(v) >= 80},
+                    "by_time_spent": {k: fit(v) for k, v in by_spent.items() if len(v) >= 80},
+                    "by_opponent_rating": {k: fit(v) for k, v in by_opp.items() if len(v) >= 80},
+                    "opponent_conditioning": {k: fit(v) for k, v in opp_test.items() if len(v) >= 80}}
+    log("human", json.dumps(out["human"]))
 
 
 def main():
@@ -139,6 +205,10 @@ def main():
         out["temperature_by_phase"][ph] = {"n": len(sel), "best": min(g2, key=g2.get),
                                            "logloss": {k: round(v, 4) for k, v in g2.items()}}
     log("temperature_by_phase", json.dumps(out["temperature_by_phase"]))
+    if os.environ.get("TUNE_ONLY") == "human":
+        human(eng, w, hold, text, out)
+        json.dump(out, open(f"{NAME}-tune.json", "w"), indent=1)
+        return
     if os.environ.get("TUNE_ONLY") == "temperature":
         json.dump(out, open(f"{NAME}-tune.json", "w"), indent=1)
         return
