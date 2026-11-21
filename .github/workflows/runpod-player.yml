@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "both = train then imitate | fetch = only download the games and count them (no GPU) | train = fine-tune the model | imitate = learn style rules + own opening book"
+        description: "both = train then imitate | fetch = only download the games and count them (no GPU) | tune = measure temperature + real thinking times | train = fine-tune the model | imitate = learn style rules + own opening book"
         default: "both"
       player:
         description: "Games to train on (same format as Kaggle training)"
@@ -135,3 +135,33 @@ jobs:
           git add tal/$N-rules.json book-$N.json
           git commit -m "$N: learned rules and opening book (RunPod)" || echo "no changes"
           git push
+  tune:
+    if: inputs.mode == 'tune'
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check key
+        run: if [ -z "$RUNPOD_API_KEY" ]; then echo "::error::Secret RUNPOD_API_KEY missing"; exit 1; fi
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Download the games here (chess.com blocks some GPU-cloud IPs)
+        run: |
+          pip install -q chess requests
+          PLAYER="${{ inputs.player }}" python tools/fetch_games.py "${{ inputs.name }}-games.pgn.gz"
+          gh release upload tal-runs "${{ inputs.name }}-games.pgn.gz" --clobber
+      - run: echo "STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+      - name: Start GPU
+        run: |
+          echo "POD=$(python3 tools/runpod.py start ${{ inputs.name }}-tune PLAN_MODE=tune PLAYER_NAME=${{ inputs.name }} GAMES_ASSET=${{ inputs.name }}-games.pgn.gz \
+            "PLAYER=${{ inputs.player }}" PLAYER_MAX_GAMES=0)" >> "$GITHUB_ENV"
+      - name: Wait
+        run: python3 tools/runpod.py wait "$POD" tal-runs ${{ inputs.name }}-tune.json ${{ inputs.max_minutes }}
+      - name: Shut the GPU down (always)
+        if: always()
+        run: '[ -n "$POD" ] && python3 tools/runpod.py stop "$POD" || echo "no pod"'
+      - name: Results
+        run: |
+          gh release download tal-runs -p "${{ inputs.name }}-tune.json" --clobber
+          cat "${{ inputs.name }}-tune.json" | tee -a "$GITHUB_STEP_SUMMARY"

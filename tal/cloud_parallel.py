@@ -63,6 +63,25 @@ def main():
         json.dump(out, open("pretrain-info.json", "w"), indent=1)
         upload(TAG, "pretrain-info.json", "pretrain-info.json")   # done signal
         return
+    if mode == "tune":      # measure temperature + the player's real thinking times (tal.tune)
+        name = os.environ["PLAYER_NAME"]
+        out = {"gpu": gpu}
+        try:
+            os.makedirs("prev", exist_ok=True)
+            download(f"{name}-79m.pt", f"prev/{name}-79m.pt", tag=f"{name}-model")
+            env = {**os.environ, "IMIT_NAME": name, "TAL_CKPT": f"prev/{name}-79m.pt"}
+            p = subprocess.run(["python", "-u", "-m", "tal.tune"], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            print(p.stdout, flush=True)
+            open(f"{name}-tune.log", "w").write(p.stdout)
+            upload(TAG, f"{name}-tune.log", f"{name}-tune.log")
+            if p.returncode != 0:
+                raise RuntimeError("\n".join(p.stdout.splitlines()[-25:]))
+            out.update(json.load(open(f"{name}-tune.json")))
+        except Exception as e:
+            out["error"] = str(e)
+        json.dump(out, open(f"{name}-tune.json", "w"), indent=1)
+        upload(TAG, f"{name}-tune.json", f"{name}-tune.json")   # done signal
+        return
     if mode == "imitate":   # player imitation (rules + own book) on the GPU: much faster than GitHub's CPU runner
         name = os.environ["PLAYER_NAME"]
         out = {"gpu": gpu}

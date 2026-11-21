@@ -83,7 +83,7 @@ def download_chesscom(user, classes):
 
 def download_lichess(user, speeds):
     r = requests.get(f"https://lichess.org/api/games/user/{user}", headers={**UA, "Accept": "application/x-chess-pgn"},
-                     params={"perfType": ",".join(speeds), "max": MAX_GAMES or None}, timeout=600)
+                     params={"perfType": ",".join(speeds), "max": MAX_GAMES or None, "clocks": "true"}, timeout=600)
     if r.status_code != 200:
         log(f"lichess {user}: HTTP {r.status_code}, skipped")
         return ""
