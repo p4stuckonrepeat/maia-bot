@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "both = train then imitate | train = fine-tune the model | imitate = learn style rules + own opening book"
+        description: "both = train then imitate | fetch = only download the games and count them (no GPU) | train = fine-tune the model | imitate = learn style rules + own opening book"
         default: "both"
       player:
         description: "Games to train on (same format as Kaggle training)"
@@ -33,6 +33,20 @@ env:
   GH_REPO: ${{ github.repository }}
   BRANCH: ${{ github.ref_name }}
 jobs:
+  fetch:
+    if: inputs.mode == 'fetch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Download and count
+        run: |
+          pip install -q chess requests
+          PLAYER="${{ inputs.player }}" python tools/fetch_games.py "${{ inputs.name }}-games.pgn.gz" 2>&1 | tee fetch.log
+          zcat "${{ inputs.name }}-games.pgn.gz" | grep -o '^\[Site "[^"]*' | sed 's/.*"//; s#https://lichess.org/.*#lichess#' | sort | uniq -c | sort -rn | head -8 | tee -a fetch.log
+          cat fetch.log >> "$GITHUB_STEP_SUMMARY"
   train:
     if: inputs.mode == 'train' || inputs.mode == 'both'
     runs-on: ubuntu-latest

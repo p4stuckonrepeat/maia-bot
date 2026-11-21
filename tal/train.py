@@ -50,12 +50,22 @@ def download_chesscom(user, classes):
             break
         log(f"chess.com {user}: archives HTTP {r.status_code}, retry {attempt + 1}")
         time.sleep(10 * (attempt + 1))
-    archives = r.json()["archives"]
+    if r.status_code == 200:
+        archives = r.json()["archives"]
+    else:   # archive list not available: try every month directly
+        y, m = time.gmtime().tm_year, time.gmtime().tm_mon
+        archives = [f"https://api.chess.com/pub/player/{user}/games/{yy}/{mm:02d}"
+                    for yy in range(2010, y + 1) for mm in range(1, 13) if (yy, mm) <= (y, m)]
+        log(f"chess.com {user}: trying {len(archives)} months directly")
     parts = []
     for url in reversed(archives):          # newest first
         for _ in range(3):
             try:
-                data = requests.get(url, headers=UA, timeout=60).json()
+                rr = requests.get(url, headers=UA, timeout=60)
+                if rr.status_code == 404:
+                    data = {}
+                    break
+                data = rr.json()
                 break
             except Exception:
                 time.sleep(5)
