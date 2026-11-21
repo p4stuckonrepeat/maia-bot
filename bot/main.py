@@ -248,6 +248,12 @@ class Bot:
         if move:
             return move, None, opening, 1.0
         mcfg, gcfg, scfg = self.cfg["maia"], self.cfg.get("guard", {}), self.cfg.get("style", {})
+        tbp = mcfg.get("temperature_by_phase")   # e.g. {opening: 0.8, middlegame: 1.1, endgame: 0.9}
+        if tbp:
+            from bot.style import phase
+            ph = phase(board)
+            if ph in tbp:
+                mcfg = {**mcfg, "temperature": float(tbp[ph])}
         move, top = None, []
         srch = self.cfg.get("search", {})
         clock = state.get("wtime" if color == chess.WHITE else "btime")

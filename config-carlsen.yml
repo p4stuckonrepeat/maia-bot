@@ -4,7 +4,8 @@ maia:
   model: maia3-79m     # (model change needs a restart)
   checkpoint: carlsen-79m.pt  # Maia-3 79M fine-tuned on all of Carlsen's games: OTB + Chess.com + Lichess blitz/rapid (downloaded at start)
   elo: 2600            # rating Maia imitates (trained range 600-2600)
-  temperature: 1.0     # measured on Carlsen's games: 1.0-1.2 matches how varied his real choices are (0.6 was too predictable)
+  temperature: 1.2     # measured on Carlsen's games: 1.2 matches how varied his real choices are best (0.6 was too predictable)
+  temperature_by_phase: {opening: 1.2, middlegame: 1.2, endgame: 1.1}   # measured per phase: slightly more precise in endgames
   top_p: 1.0           # only sample from the most likely moves covering this probability
   oppo_elo: 2600       # opponent rating Maia assumes; "opponent" = real rating (plays sloppier vs weak players)
 
