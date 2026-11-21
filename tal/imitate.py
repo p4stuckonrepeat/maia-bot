@@ -177,7 +177,7 @@ def main():
 
     results = {}
     for label, ckpt in [("normal Maia-3", None), (f"{NAME} model", CKPT)]:
-        args = ["--model", "maia3-79m"] + (["--checkpoint", ckpt] if ckpt else [])
+        args = ["--model", "maia3-79m", "--device", "cuda" if torch.cuda.is_available() else "cpu"] + (["--checkpoint", ckpt] if ckpt else [])
         eng = Maia3UCIEngine(parse_args(args))
         eng.ensure_model_loaded()
         t = time.time()

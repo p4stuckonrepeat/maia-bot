@@ -2,6 +2,9 @@ name: "Player style training on RunPod (paid GPU, fast)"
 on:
   workflow_dispatch:
     inputs:
+      mode:
+        description: "train = fine-tune the model, imitate = learn style rules + own opening book (fast on GPU)"
+        default: "train"
       player:
         description: "Games to train on (same format as Kaggle training)"
         default: "multi:group:Carlsen+chesscom:magnuscarlsen:blitz,rapid+lichess:DrNykterstein:blitz,rapid"
@@ -31,6 +34,7 @@ env:
   BRANCH: ${{ github.ref_name }}
 jobs:
   train:
+    if: inputs.mode == 'train'
     runs-on: ubuntu-latest
     timeout-minutes: 240
     steps:
@@ -68,3 +72,35 @@ jobs:
           TAG="$N-model"
           gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "$N style model" --notes "Maia-3 79M fine-tuned on ${{ inputs.player }}"
           gh release upload "$TAG" "$N-79m.pt" "$N-info.json" --clobber
+  imitate:
+    if: inputs.mode == 'imitate'
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check key
+        run: if [ -z "$RUNPOD_API_KEY" ]; then echo "::error::Secret RUNPOD_API_KEY missing"; exit 1; fi
+      - run: echo "STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+      - name: Start GPU
+        run: |
+          echo "POD=$(python3 tools/runpod.py start ${{ inputs.name }}-imitate PLAN_MODE=imitate PLAYER_NAME=${{ inputs.name }} \
+            "PLAYER=${{ inputs.player }}" IMIT_TRAIN_POSITIONS=6000 IMIT_EVAL_POSITIONS=2500 PLAYER_MAX_GAMES=0)" >> "$GITHUB_ENV"
+      - name: Wait
+        run: python3 tools/runpod.py wait "$POD" tal-runs ${{ inputs.name }}-imitate.json ${{ inputs.max_minutes }}
+      - name: Shut the GPU down (always)
+        if: always()
+        run: '[ -n "$POD" ] && python3 tools/runpod.py stop "$POD" || echo "no pod"'
+      - name: Results and save rules + book to the branch
+        run: |
+          N="${{ inputs.name }}"
+          gh release download tal-runs -p "$N-imitate.json" -p "$N-imitate.log" --clobber
+          grep -E "chess.com|lichess |games:|group|exact player moves|rules|book" "$N-imitate.log" | tail -30 | tee -a "$GITHUB_STEP_SUMMARY"
+          python3 -c "import json,sys; i=json.load(open('$N-imitate.json')); print(i.get('summary','')); sys.exit('failed: '+i['error'] if 'error' in i else 0)" | tee -a "$GITHUB_STEP_SUMMARY"
+          gh release download tal-runs -p "$N-rules.json" -p "book-$N.json" -D /tmp --clobber
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin ${{ github.ref_name }} && git reset --hard origin/${{ github.ref_name }}
+          cp /tmp/$N-rules.json tal/ && cp /tmp/book-$N.json .
+          git add tal/$N-rules.json book-$N.json
+          git commit -m "$N: learned rules and opening book (RunPod)" || echo "no changes"
+          git push

@@ -60,6 +60,27 @@ def main():
         json.dump(out, open("pretrain-info.json", "w"), indent=1)
         upload(TAG, "pretrain-info.json", "pretrain-info.json")   # done signal
         return
+    if mode == "imitate":   # player imitation (rules + own book) on the GPU: much faster than GitHub's CPU runner
+        name = os.environ["PLAYER_NAME"]
+        out = {"gpu": gpu}
+        try:
+            os.makedirs("prev", exist_ok=True)
+            download(f"{name}-79m.pt", f"prev/{name}-79m.pt", tag=f"{name}-model")
+            env = {**os.environ, "IMIT_NAME": name, "TAL_CKPT": f"prev/{name}-79m.pt", "GITHUB_STEP_SUMMARY": "imitate-summary.md"}
+            p = subprocess.run(["python", "-u", "-m", "tal.imitate"], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            print(p.stdout, flush=True)
+            open(f"{name}-imitate.log", "w").write(p.stdout)
+            upload(TAG, f"{name}-imitate.log", f"{name}-imitate.log")
+            if p.returncode != 0:
+                raise RuntimeError("\n".join(p.stdout.splitlines()[-25:]))
+            upload(TAG, f"tal/{name}-rules.json", f"{name}-rules.json")
+            upload(TAG, f"book-{name}.json", f"book-{name}.json")
+            out["summary"] = open("imitate-summary.md").read() if os.path.exists("imitate-summary.md") else ""
+        except Exception as e:
+            out["error"] = str(e)
+        json.dump(out, open(f"{name}-imitate.json", "w"), indent=1)
+        upload(TAG, f"{name}-imitate.json", f"{name}-imitate.json")   # done signal
+        return
     if mode == "player":    # any player (e.g. Carlsen): fine-tune on PLAYER -> <name>-79m.pt + <name>-info.json in tal-runs
         name = os.environ["PLAYER_NAME"]
         out = {"gpu": gpu}
