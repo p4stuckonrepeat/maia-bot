@@ -18,27 +18,27 @@
   "safety"
  ],
  "weights": {
-  "logp": 0.994,
-  "exp": 0.2538,
-  "capture": 0.0393,
-  "check": -0.0309,
-  "sacrifice": -0.003,
-  "king_pressure": -0.0195,
-  "near_king": 0.0507,
-  "pawn_storm": -0.0502,
-  "mobility": 0.0657,
-  "retreat": 0.0473,
-  "queen_trade": -0.0321,
-  "castle": -0.0091,
-  "develop": 0.0239,
-  "center_pawn": 0.0182,
-  "pawn_break": -0.0594,
-  "safety": 0.0549
+  "logp": 0.9535,
+  "exp": 0.21,
+  "capture": 0.0346,
+  "check": 0.0069,
+  "sacrifice": 0.0282,
+  "king_pressure": -0.0032,
+  "near_king": 0.007,
+  "pawn_storm": 0.0174,
+  "mobility": -0.0539,
+  "retreat": 0.0164,
+  "queen_trade": 0.0197,
+  "castle": 0.0163,
+  "develop": -0.0979,
+  "center_pawn": 0.0819,
+  "pawn_break": -0.0257,
+  "safety": 0.0322
  },
  "results": {
-  "normal Maia-3": 0.5624,
-  "carlsen model": 0.5684,
-  "carlsen model + learned rules": 0.57,
-  "+ carlsen's own opening book": 0.5832
+  "normal Maia-3": 0.5824,
+  "carlsen model": 0.5964,
+  "carlsen model + learned rules": 0.5956,
+  "+ carlsen's own opening book": 0.6268
  }
 }
