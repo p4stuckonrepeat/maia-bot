@@ -16,7 +16,7 @@ import time
 import chess
 import torch
 
-from bot.style import VALUE, positional_score
+from bot.style import VALUE, _worst_piece, is_passed, material, opp_mobility, phase, positional_score
 from tal.train import download_games, log, samples, tal_games
 
 N_TRAIN = int(os.environ.get("IMIT_TRAIN_POSITIONS", "6000"))
@@ -41,7 +41,9 @@ def zone_pressure(board, color, zone):
 
 
 FEATURES = ["logp", "exp", "capture", "check", "sacrifice", "king_pressure", "near_king", "pawn_storm",
-            "mobility", "retreat", "queen_trade", "castle", "develop", "center_pawn", "pawn_break", "safety"]
+            "mobility", "retreat", "queen_trade", "castle", "develop", "center_pawn", "pawn_break", "safety",
+            # positional / Carlsen-type ideas (appended: older rules files simply ignore them)
+            "prophylaxis", "worst_piece", "endgame_king", "trade_when_ahead", "passed_push", "hit_weakness"]
 
 
 def features(board, move, policy, exp):
@@ -69,8 +71,26 @@ def features(board, move, policy, exp):
         if piece == chess.PAWN and abs(chess.square_file(move.to_square) - chess.square_file(ek)) <= 1 and not captured:
             f["pawn_storm"] = 1.0
     f["safety"] = positional_score(board, move)
+    opp_before = opp_mobility(board)
+    f["worst_piece"] = 1.0 if move.from_square == _worst_piece(board, color)[0] else 0.0
+    endgame = phase(board) == "endgame"
+    if piece == chess.KING and endgame:
+        cd = lambda sq: max(abs(chess.square_file(sq) - 3.5), abs(chess.square_rank(sq) - 3.5))
+        f["endgame_king"] = 1.0 if cd(move.to_square) < cd(move.from_square) else 0.0
+    if captured and captured != chess.PAWN:
+        diff = material(board, color) - material(board, not color)
+        f["trade_when_ahead"] = 1.0 if diff >= 2 else (-1.0 if diff <= -2 else 0.0)
+    if piece == chess.PAWN and not captured and is_passed(board, move.from_square, color):
+        f["passed_push"] = 2.0 if endgame else 1.0
+    enemy_files = [chess.square_file(q) for q in board.pieces(chess.PAWN, not color)]
+    weak = {q for q in board.pieces(chess.PAWN, not color)
+            if (chess.square_file(q) - 1) not in enemy_files and (chess.square_file(q) + 1) not in enemy_files}
     board.push(move)
     try:
+        if opp_before is not None:
+            f["prophylaxis"] = (opp_before - board.legal_moves.count()) / 10.0
+        if piece != chess.KING and any(q in weak for q in board.attacks(move.to_square)):
+            f["hit_weakness"] = 1.0
         f["king_pressure"] = (zone_pressure(board, color, zone) - pressure_before) / 3.0
         if piece != chess.KING:
             attackers = board.attackers(not color, move.to_square)

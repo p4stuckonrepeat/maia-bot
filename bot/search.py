@@ -58,7 +58,7 @@ class Search:
             best = max(best, v)
         return best
 
-    def choose(self, board, maia_cfg, scfg, opp_rating=None):
+    def choose(self, board, maia_cfg, scfg, opp_rating=None, scorer=None):
         """Return (move, candidates with search values, note or None)."""
         bot_elo = int(maia_cfg["elo"])
         fixed = maia_cfg.get("oppo_elo", "opponent")
@@ -83,7 +83,13 @@ class Search:
         margin = float(scfg.get("margin", 0.10))     # how much worse than the best line is still OK
         ok = [c for c in root if c["value"] >= best - margin]
         temp = max(0.05, float(maia_cfg["temperature"]))
-        pick = random.choices(ok, weights=[c["policy"] ** (1 / temp) for c in ok])[0]
+        if scorer:   # the player's learned style rules choose among the moves the calculation keeps
+            import math
+            logits = [scorer(board, c) for c in ok]
+            mx = max(logits)
+            pick = random.choices(ok, weights=[math.exp((l - mx) / temp) for l in logits])[0]
+        else:
+            pick = random.choices(ok, weights=[c["policy"] ** (1 / temp) for c in ok])[0]
         note = None
         dropped = [c for c in root if c not in ok]
         if dropped and dropped[0] is root[0]:

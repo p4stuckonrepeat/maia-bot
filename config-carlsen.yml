@@ -27,7 +27,7 @@ style:                 # consistent playing style (one "person" across games)
 
 timing:                # Carlsen's real thinking times, measured from ~7,000 of his 3-minute online games (%clk)
   enabled: true
-  speed: 1.0           # multiplies all times: 1.5 = slower, 0.7 = faster
+  speed: 1.3           # a bit slower than his real 3+0 times (more natural for a bot). 1.5 = slower, 0.7 = faster
   reference_game_seconds: 180  # the times below are for 3+0; longer games scale up (15+10 is ~3x slower)
   clock_scale_power: 0.8
   book: [0.3, 1.8]     # his opening moves: median 1.0 s

@@ -253,7 +253,12 @@ class Bot:
         clock = state.get("wtime" if color == chess.WHITE else "btime")
         calc_note = None
         if srch.get("enabled") and (clock is None or clock > srch.get("min_clock_seconds", 30) * 1000):
-            move, top, calc_note = self.search.choose(board, mcfg, srch, opp_rating)
+            scorer = None
+            if scfg.get("enabled") and scfg.get("name") == "tal_learned":
+                from bot.style import tal_learned_logit
+                rules = scfg.get("rules_file", "tal/tal-rules.json")
+                scorer = lambda bd, c: tal_learned_logit(bd, c, rules)
+            move, top, calc_note = self.search.choose(board, mcfg, srch, opp_rating, scorer=scorer)
         if move is None and scfg.get("enabled"):
             move, top, _ = self.maia.choose_styled(board, mcfg, scfg, opp_rating)
         if move is None:

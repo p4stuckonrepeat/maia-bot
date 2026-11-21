@@ -122,6 +122,51 @@ def main():
     out["temperature"] = {"grid": grid, "best": best, "player_move_in_top": round(len(covered) / len(Y), 4)}
     log("temperature", json.dumps(out["temperature"]))
 
+    # 1b. human-like calculation (bot.search): does checking the opponent's replies with Maia's own
+    #     judgement make the bot pick Carlsen's move more often than the rules alone?
+    import threading
+    import types
+    from bot.search import Search
+    from tal.imitate import features
+    srch = Search(types.SimpleNamespace(eng=eng, lock=threading.Lock()))
+    n_s = int(os.environ.get("TUNE_SEARCH_POSITIONS", "800"))
+    res = {"rules only": 0}
+    configs = [(d, m, c) for d in (1, 2) for m in (0.05, 0.10, 0.20) for c in (4, 6)]
+    for cfg in configs:
+        res[f"search depth {cfg[0]} margin {cfg[1]} candidates {cfg[2]}"] = 0
+    counted = 0
+    for n, (gi, ply) in enumerate(s_hold[:n_s]):
+        g = hold[gi]
+        b = chess.Board()
+        for m in g["moves"][:ply]:
+            b.push_uci(m)
+        real = g["moves"][ply]
+        top = candidates(eng, b)
+        if not top:
+            continue
+        counted += 1
+        lg = lambda c: float(torch.tensor(features(b, c["move"], c["policy"], (c["wdl"][0] + 0.5 * c["wdl"][1]) / 1000)) @ w)
+        plain = max(top, key=lg)["move"].uci()
+        res["rules only"] += plain == real
+        for d, m, c in configs:
+            key_ = f"search depth {d} margin {m} candidates {c}"
+            if top[0]["policy"] >= 0.9:
+                res[key_] += plain == real
+                continue
+            root = top[:c]
+            for cd in root:
+                b.push(cd["move"])
+                cd["value"] = 1.0 if b.is_checkmate() else 1.0 - srch.value(b, d, (2600, 2600), [3, 2])
+                b.pop()
+            best = max(cd["value"] for cd in root)
+            ok = [cd for cd in root if cd["value"] >= best - m]
+            res[key_] += max(ok, key=lg)["move"].uci() == real
+        if n % 200 == 0:
+            log(f"  search {n}/{n_s}")
+    out["search"] = {k: round(v / max(1, counted), 4) for k, v in res.items()}
+    out["search_positions"] = counted
+    log("search", json.dumps(out["search"]))
+
     # 2. timing (blitz games with clocks)
     book = build_book(train)
     tg = [g for g in timed_games(text) if 150 <= g["base"] + 40 * g["inc"] <= 300]   # ~3+0 .. 3+2 / 5+0
