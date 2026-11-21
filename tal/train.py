@@ -26,7 +26,9 @@ from maia3.uci import Maia3UCIEngine, parse_args
 from maia3.utils import mirror_move
 
 # PLAYER = "tal" (pgnmentor over-the-board games) or "chesscom:<user>:<time classes>",
-# e.g. "chesscom:hikaru:blitz,rapid", or "lichess:<user>:<speeds>".
+# e.g. "chesscom:hikaru:blitz,rapid", or "lichess:<user>:<speeds>", or several sources of ONE player
+# joined with "+" after "multi:", e.g.
+# "multi:group:Carlsen+chesscom:magnuscarlsen:blitz,rapid+lichess:DrNykterstein:blitz,rapid".
 PLAYER = os.environ.get("PLAYER", "tal")
 MAX_GAMES = int(os.environ.get("PLAYER_MAX_GAMES", "0"))     # 0 = all
 SOURCES = ["https://www.pgnmentor.com/players/Tal.zip"]
@@ -65,6 +67,10 @@ def download_chesscom(user, classes):
 def download_lichess(user, speeds):
     r = requests.get(f"https://lichess.org/api/games/user/{user}", headers={**UA, "Accept": "application/x-chess-pgn"},
                      params={"perfType": ",".join(speeds), "max": MAX_GAMES or None}, timeout=600)
+    if r.status_code != 200:
+        log(f"lichess {user}: HTTP {r.status_code}, skipped")
+        return ""
+    log(f"lichess {user}: {r.text.count('[Event ')} games ({','.join(speeds)})")
     return r.text
 
 
@@ -83,14 +89,27 @@ def download_group(names):
     return "\n".join(parts)
 
 
-def download_games():
-    if PLAYER.startswith("group:"):
-        return download_group(PLAYER.split(":", 1)[1].split(","))
-    if PLAYER.startswith("chesscom:"):
-        _, user, classes = PLAYER.split(":")
+def multi_sources():
+    return PLAYER.split(":", 1)[1].split("+") if PLAYER.startswith("multi:") else []
+
+
+def download_games(spec=None):
+    spec = spec or PLAYER
+    if spec.startswith("multi:"):
+        parts = []
+        for src in multi_sources():
+            try:
+                parts.append(download_games(src))
+            except Exception as e:
+                log(f"source failed {src}: {e}")
+        return "\n\n".join(p for p in parts if p)
+    if spec.startswith("group:"):
+        return download_group(spec.split(":", 1)[1].split(","))
+    if spec.startswith("chesscom:"):
+        _, user, classes = spec.split(":")
         return download_chesscom(user, classes.split(","))
-    if PLAYER.startswith("lichess:"):
-        _, user, speeds = PLAYER.split(":")
+    if spec.startswith("lichess:"):
+        _, user, speeds = spec.split(":")
         return download_lichess(user, speeds.split(","))
     for url in SOURCES:
         try:
@@ -103,6 +122,17 @@ def download_games():
         except Exception as e:
             log(f"source failed {url}: {e}")
     sys.exit("No source for Tal's games worked.")
+
+
+def is_player(name):
+    """multi: the name belongs to the player in any of the sources (OTB surname or online account)."""
+    for src in multi_sources():
+        kind, rest = src.split(":", 1)
+        if kind == "group" and any(re.match(rf"^{x}\b", name) for x in rest.split(",")):
+            return True
+        if kind in ("chesscom", "lichess") and name.lower() == rest.split(":")[0].lower():
+            return True
+    return False
 
 
 def tal_games(text):
@@ -126,7 +156,9 @@ def tal_games(text):
             if MAX_GAMES and len(games) >= MAX_GAMES:
                 break
             continue
-        if ":" in PLAYER:
+        if PLAYER.startswith("multi:"):
+            is_w, is_b = is_player(w), is_player(b)
+        elif ":" in PLAYER:
             user = PLAYER.split(":")[1].lower()
             is_w, is_b = w.lower() == user, b.lower() == user
         else:

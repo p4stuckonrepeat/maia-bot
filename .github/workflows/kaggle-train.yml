@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       player:
-        description: "tal | chesscom:<user>:<classes> | lichess:<user>:<speeds>"
+        description: "tal | chesscom:<user>:<classes> | lichess:<user>:<speeds> | multi:<src>+<src> (e.g. Carlsen: multi:group:Carlsen+chesscom:magnuscarlsen:blitz,rapid+lichess:DrNykterstein:blitz,rapid)"
         default: "chesscom:hikaru:blitz,rapid"
       name:
         description: "Model name (file <name>-79m.pt, release <name>-model)"
@@ -54,7 +54,7 @@ jobs:
           def sh(c): print("+", c, flush=True); subprocess.run(c, shell=True, check=True)
           sh("nvidia-smi || true")
           sh("pip install -q git+https://github.com/CSSLab/maia3@1e13597c42d4858b7cfd7cfdae01e297263364b2 pyyaml python-chess")
-          sh("git clone --depth 1 https://github.com/${{ github.repository }} repo")
+          sh("git clone --depth 1 -b ${{ github.ref_name }} https://github.com/${{ github.repository }} repo")
           os.environ.update({"PLAYER": "${{ inputs.player }}", "PLAYER_MAX_GAMES": "${{ inputs.max_games }}",
                              "TAL_EPOCHS": "${{ inputs.epochs }}", "TAL_MINUTES": "${{ inputs.minutes }}",
                              "TAL_TRAIN_BLOCKS": "${{ inputs.train_blocks }}", "TAL_LR": "${{ inputs.lr }}",
