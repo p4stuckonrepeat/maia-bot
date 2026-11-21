@@ -46,6 +46,9 @@ def download(name, path, tag=TAG):
 
 def main():
     mode = os.environ["PLAN_MODE"]
+    if os.environ.get("GAMES_ASSET"):     # games prefetched by the GitHub runner
+        download(os.environ["GAMES_ASSET"], "games.pgn.gz")
+        os.environ["GAMES_FILE"] = os.path.abspath("games.pgn.gz")
     gpu = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "cpu"
     log("mode", mode, "gpu", gpu, "cpus", os.cpu_count())
     if mode == "pretrain":

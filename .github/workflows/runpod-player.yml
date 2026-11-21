@@ -3,8 +3,8 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "train = fine-tune the model, imitate = learn style rules + own opening book (fast on GPU)"
-        default: "train"
+        description: "both = train then imitate | train = fine-tune the model | imitate = learn style rules + own opening book"
+        default: "both"
       player:
         description: "Games to train on (same format as Kaggle training)"
         default: "multi:group:Carlsen+chesscom:magnuscarlsen:blitz,rapid+lichess:DrNykterstein:blitz,rapid"
@@ -34,17 +34,25 @@ env:
   BRANCH: ${{ github.ref_name }}
 jobs:
   train:
-    if: inputs.mode == 'train'
+    if: inputs.mode == 'train' || inputs.mode == 'both'
     runs-on: ubuntu-latest
     timeout-minutes: 240
     steps:
       - uses: actions/checkout@v4
       - name: Check key
         run: if [ -z "$RUNPOD_API_KEY" ]; then echo "::error::Secret RUNPOD_API_KEY missing"; exit 1; fi
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Download the games here (chess.com blocks some GPU-cloud IPs)
+        run: |
+          pip install -q chess requests
+          PLAYER="${{ inputs.player }}" python tools/fetch_games.py "${{ inputs.name }}-games.pgn.gz"
+          gh release upload tal-runs "${{ inputs.name }}-games.pgn.gz" --clobber
       - run: echo "STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
       - name: Start GPU
         run: |
-          echo "POD=$(python3 tools/runpod.py start ${{ inputs.name }} PLAN_MODE=player PLAYER_NAME=${{ inputs.name }} \
+          echo "POD=$(python3 tools/runpod.py start ${{ inputs.name }} PLAN_MODE=player PLAYER_NAME=${{ inputs.name }} GAMES_ASSET=${{ inputs.name }}-games.pgn.gz \
             "PLAYER=${{ inputs.player }}" TAL_EPOCHS=${{ inputs.epochs }} TAL_MINUTES=${{ inputs.minutes }} \
             TAL_TRAIN_BLOCKS=${{ inputs.train_blocks }} TAL_LR=${{ inputs.lr }})" >> "$GITHUB_ENV"
       - name: Wait
@@ -73,17 +81,26 @@ jobs:
           gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "$N style model" --notes "Maia-3 79M fine-tuned on ${{ inputs.player }}"
           gh release upload "$TAG" "$N-79m.pt" "$N-info.json" --clobber
   imitate:
-    if: inputs.mode == 'imitate'
+    needs: train
+    if: always() && (inputs.mode == 'imitate' || (inputs.mode == 'both' && needs.train.result == 'success'))
     runs-on: ubuntu-latest
     timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
       - name: Check key
         run: if [ -z "$RUNPOD_API_KEY" ]; then echo "::error::Secret RUNPOD_API_KEY missing"; exit 1; fi
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Download the games here (chess.com blocks some GPU-cloud IPs)
+        run: |
+          pip install -q chess requests
+          PLAYER="${{ inputs.player }}" python tools/fetch_games.py "${{ inputs.name }}-games.pgn.gz"
+          gh release upload tal-runs "${{ inputs.name }}-games.pgn.gz" --clobber
       - run: echo "STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
       - name: Start GPU
         run: |
-          echo "POD=$(python3 tools/runpod.py start ${{ inputs.name }}-imitate PLAN_MODE=imitate PLAYER_NAME=${{ inputs.name }} \
+          echo "POD=$(python3 tools/runpod.py start ${{ inputs.name }}-imitate PLAN_MODE=imitate PLAYER_NAME=${{ inputs.name }} GAMES_ASSET=${{ inputs.name }}-games.pgn.gz \
             "PLAYER=${{ inputs.player }}" IMIT_TRAIN_POSITIONS=6000 IMIT_EVAL_POSITIONS=2500 PLAYER_MAX_GAMES=0)" >> "$GITHUB_ENV"
       - name: Wait
         run: python3 tools/runpod.py wait "$POD" tal-runs ${{ inputs.name }}-imitate.json ${{ inputs.max_minutes }}

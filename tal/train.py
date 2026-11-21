@@ -6,6 +6,7 @@ train (policy = Tal's move, value = game result) -> measure again (after) -> sav
 
 Env: TAL_MINUTES (training time budget), TAL_EPOCHS, TAL_LR, TAL_RESUME (path to checkpoint).
 """
+import gzip
 import io
 import json
 import os
@@ -43,7 +44,13 @@ def log(*a):
 
 
 def download_chesscom(user, classes):
-    archives = requests.get(f"https://api.chess.com/pub/player/{user}/games/archives", headers=UA, timeout=60).json()["archives"]
+    for attempt in range(5):
+        r = requests.get(f"https://api.chess.com/pub/player/{user}/games/archives", headers=UA, timeout=60)
+        if r.status_code == 200 and "archives" in r.text:
+            break
+        log(f"chess.com {user}: archives HTTP {r.status_code}, retry {attempt + 1}")
+        time.sleep(10 * (attempt + 1))
+    archives = r.json()["archives"]
     parts = []
     for url in reversed(archives):          # newest first
         for _ in range(3):
@@ -94,6 +101,11 @@ def multi_sources():
 
 
 def download_games(spec=None):
+    gf = os.environ.get("GAMES_FILE")      # games downloaded beforehand (e.g. on GitHub, where chess.com works)
+    if spec is None and gf and os.path.exists(gf):
+        text = gzip.open(gf, "rt").read()
+        log(f"games file {gf}: {text.count('[Event ')} games")
+        return text
     spec = spec or PLAYER
     if spec.startswith("multi:"):
         parts = []
