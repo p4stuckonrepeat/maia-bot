@@ -154,7 +154,7 @@ jobs:
       - run: echo "STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
       - name: Start GPU
         run: |
-          echo "POD=$(python3 tools/runpod.py start ${{ inputs.name }}-tune PLAN_MODE=tune PLAYER_NAME=${{ inputs.name }} GAMES_ASSET=${{ inputs.name }}-games.pgn.gz \
+          echo "POD=$(python3 tools/runpod.py start ${{ inputs.name }}-tune PLAN_MODE=tune TUNE_ONLY=temperature PLAYER_NAME=${{ inputs.name }} GAMES_ASSET=${{ inputs.name }}-games.pgn.gz \
             "PLAYER=${{ inputs.player }}" PLAYER_MAX_GAMES=0)" >> "$GITHUB_ENV"
       - name: Wait
         run: python3 tools/runpod.py wait "$POD" tal-runs ${{ inputs.name }}-tune.json ${{ inputs.max_minutes }}

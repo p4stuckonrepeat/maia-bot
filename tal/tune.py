@@ -121,6 +121,27 @@ def main():
     best = min(grid, key=lambda t: grid[t]["logloss"])
     out["temperature"] = {"grid": grid, "best": best, "player_move_in_top": round(len(covered) / len(Y), 4)}
     log("temperature", json.dumps(out["temperature"]))
+    # per game phase (opening / middlegame / endgame): humans are more precise in some phases
+    from bot.style import phase as _phase
+    phases = []
+    for gi, ply in s_hold:
+        bb = chess.Board()
+        for m in hold[gi]["moves"][:ply]:
+            bb.push_uci(m)
+        phases.append(_phase(bb))
+    out["temperature_by_phase"] = {}
+    for ph in ("opening", "middlegame", "endgame"):
+        sel = [(l, y) for l, y, p in zip(logits, Y, phases) if p == ph and y >= 0]
+        if len(sel) < 100:
+            continue
+        g2 = {T: sum(-torch.log_softmax(l / T, 0)[y].item() for l, y in sel) / len(sel)
+              for T in [0.4, 0.6, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.5, 1.8]}
+        out["temperature_by_phase"][ph] = {"n": len(sel), "best": min(g2, key=g2.get),
+                                           "logloss": {k: round(v, 4) for k, v in g2.items()}}
+    log("temperature_by_phase", json.dumps(out["temperature_by_phase"]))
+    if os.environ.get("TUNE_ONLY") == "temperature":
+        json.dump(out, open(f"{NAME}-tune.json", "w"), indent=1)
+        return
 
     # 1b. human-like calculation (bot.search): does checking the opponent's replies with Maia's own
     #     judgement make the bot pick Carlsen's move more often than the rules alone?
