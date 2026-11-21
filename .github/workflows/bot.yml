@@ -13,7 +13,7 @@ on:
       profile:
         description: "normal = Maia + book + rules, tal = play like Mikhail Tal"
         type: choice
-        options: [normal, tal, hikaru, carlsen]
+        options: [normal, tal, hikaru, carlsen, magnus-v2]
         default: normal
 concurrency:
   group: lichess-bot-${{ inputs.mode }}
@@ -43,7 +43,9 @@ jobs:
         if: ${{ inputs.profile != 'normal' }}
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release download "${{ inputs.profile }}-model" -p "${{ inputs.profile }}-79m.pt"
+        run: |
+          M="${{ inputs.profile }}"; [ "$M" = "magnus-v2" ] && M=carlsen   # magnus-v2 uses the Carlsen model
+          gh release download "$M-model" -p "$M-79m.pt"
       - name: Self-test (offline)
         timeout-minutes: 5
         run: python -u -m tests.selftest

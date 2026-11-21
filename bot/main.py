@@ -277,7 +277,17 @@ class Bot:
             if scfg.get("enabled") and scfg.get("name") == "tal_learned":
                 from bot.style import tal_learned_logit
                 rules = scfg.get("rules_file", "tal/tal-rules.json")
-                scorer = lambda bd, c: tal_learned_logit(bd, c, rules)
+                pcfg = scfg.get("plans", {})
+
+                def scorer(bd, cands):
+                    logits = [tal_learned_logit(bd, c, rules) for c in cands]
+                    if pcfg.get("enabled"):   # attacking plans as a tie-breaker between natural moves
+                        from bot.style import tal_plan_score
+                        rel = float(pcfg.get("min_relative_prob", 0.25)) * max(c["policy"] for c in cands)
+                        ps = float(pcfg.get("strength", 1.0))
+                        logits = [l + (ps * tal_plan_score(bd, c["move"]) if c["policy"] >= rel else 0.0)
+                                  for l, c in zip(logits, cands)]
+                    return logits
             move, top, calc_note = self.search.choose(board, mcfg, srch, opp_rating, scorer=scorer)
         if move is None and scfg.get("enabled"):
             move, top, _ = self.maia.choose_styled(board, mcfg, scfg, opp_rating)

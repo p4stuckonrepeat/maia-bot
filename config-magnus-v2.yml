@@ -1,0 +1,111 @@
+# MAGNUS V2: the pure Carlsen profile, a little more aggressive (attacking plans as a tie-breaker). No Stockfish anywhere. Maia-3 Lichess bot settings. Edit on github.com; most changes apply within ~30 s, even mid-session.
+
+maia:
+  model: maia3-79m     # (model change needs a restart)
+  checkpoint: carlsen-79m.pt  # Maia-3 79M fine-tuned on all of Carlsen's games: OTB + Chess.com + Lichess blitz/rapid (downloaded at start)
+  elo: 2600            # rating Maia imitates (trained range 600-2600)
+  temperature: 1.2     # measured on Carlsen's games: 1.2 matches how varied his real choices are best (0.6 was too predictable)
+  temperature_by_phase: {opening: 1.2, middlegame: 1.2, endgame: 1.1}   # measured per phase: slightly more precise in endgames
+  top_p: 1.0           # only sample from the most likely moves covering this probability
+  oppo_elo: 2600       # opponent rating Maia assumes; "opponent" = real rating (plays sloppier vs weak players)
+
+search:                # light human-like calculation with Maia's own judgement (no Stockfish)
+  enabled: true        # measured on Carlsen's games: 62.5% his exact move vs 61.3% without (depth 1, margin 0.10, 4 candidates)
+  candidates: 4        # natural moves considered (Maia's most likely)
+  depth: 1             # 1 = check the opponent's likely replies; 2 = also our answer (slower)
+  widths: [3, 2]       # replies considered at each level
+  margin: 0.10         # moves within 10% expected score of the best line stay eligible
+  skip_if_prob: 0.9    # don't calculate when one move is obvious
+  min_clock_seconds: 30
+
+style:                 # consistent playing style (one "person" across games)
+  enabled: true
+  name: tal_learned  # learned style rules (weights fitted on the player's games)
+  rules_file: tal/carlsen-rules.json  # weights fitted on Carlsen's games (Player imitation workflow)
+  strength: 2.0        # 0 = pure Maia, 1 = noticeable, 2+ = very consistent / predictable
+  candidates: 12       # Maia's moves the Tal rules choose between
+  min_relative_prob: 0.25 # rules may pick moves at least a quarter as likely as Maia's top choice
+  plans:               # MAGNUS V2: a little more aggressive, only between moves Carlsen would find natural
+    enabled: true
+    strength: 0.6      # 0 = off, 1 = a clear nudge (Tal profile), 0.6 = a little more aggressive
+    min_relative_prob: 0.3   # only moves at least 30% as likely as his top choice: pawn breaks, worst piece, king pressure
+
+timing:                # Carlsen's real thinking times, measured from ~7,000 of his 3-minute online games (%clk)
+  enabled: true
+  speed: 1.3           # a bit slower than his real 3+0 times (more natural for a bot). 1.5 = slower, 0.7 = faster
+  reference_game_seconds: 180  # the times below are for 3+0; longer games scale up (15+10 is ~3x slower)
+  clock_scale_power: 0.8
+  top_factor: 0.85     # measured: Carlsen plays the most natural move fast (median ~1.5 s)...
+  surprise_factor: 1.8 # ...and a less obvious move after about twice as long (median ~3 s)
+  book: [0.3, 1.8]     # his opening moves: median 1.0 s
+  forced: [0.1, 1.5]   # only one legal move / 95%+ sure: median 0.9 s
+  obvious: [0.4, 3.0]  # recaptures and 80%+ sure moves: median 1.3 s
+  follow_up: [0.4, 3.0]  # moving the same piece again: median 1.3 s
+  normal: [0.8, 5.0]   # median 1.9 s
+  hard_quick: [0.6, 2.0]   # hard moves (median 2.8 s): sometimes decided quickly...
+  hard: [2.0, 8.0]         # ...usually a few seconds...
+  long_think: [10.0, 25.0] # ...about 1 in 8 hard moves takes over 10 s
+  hard_quick_chance: 0.3
+  long_think_chance: 0.13
+  # safety net: under 30 s on the clock it plays fast so it never loses on time
+
+assist:                # quality filter: only between Maia's own natural candidate moves
+  enabled: false        # PURE CARLSEN: no Stockfish filter         # stops clearly worse choices when a natural alternative is much better
+  only_when_not_top: false # also checks Maia's own first choice (with more freedom, below)
+  max_loss_cp: 80      # Carlsen is very precise: allowed gap to the best natural candidate (80 = 0.8 pawns)
+  top_max_loss_cp: 120 # Maia's own first choice may be up to 1.2 pawns worse (keeps human inaccuracies)
+  min_prob: 0.03       # candidates Maia gives at least 3% are considered
+  depth: 12            # the replacement is picked at random among the OK candidates, weighted by Maia
+
+guard:                 # Stockfish blunder guard. Maia still chooses every move.
+  enabled: false       # PURE CARLSEN: no Stockfish guard. true = ON, false = OFF (applies mid-game within ~30 s)
+  playable_cp: -150    # only check moves when the position is at least this good for the bot
+  lost_cp: -250        # veto a move only if it leaves the bot at this evaluation or worse...
+  min_drop_cp: 300     # ...and it costs at least this much
+  winning_cp: 150      # when the bot is winning (+1.5 or more)...
+  winning_floor_cp: -50  # ...it may drop to about equal, but never into a losing position
+  depth: 14            # Stockfish search depth for the check
+  replace_with: softer_mistake  # softer_mistake = play a smaller mistake instead; maia_next = Maia's next safe move
+  softer_drop_cp: 300  # the smaller mistake aims ~3 pawns below the position before...
+  softer_target_cp: 0  # ...but at most "equal" (0), so a winning position becomes about equal
+  min_clock_seconds: 15  # skip the check when the bot's clock is lower than this
+
+challenges:
+  variants: [standard]
+  min_base_seconds: 180   # 3+0 minimum
+  max_base_seconds: 900   # 15 min maximum
+  max_increment: 10
+  accept_unlimited: true  # games without a clock
+  accept_rated: true
+  accept_casual: true
+  accept_humans: true
+  accept_bots: true
+  max_games: 1            # games at the same time
+
+session:
+  stop_accepting_minutes_before_end: 20
+
+openings:
+  # Magnus Carlsen's main repertoire: solid, classical, positions he can grind. weight 0 = only as fallback.
+  # Lines: our moves and the opponent's moves in order; "*" = any common opponent move.
+  white:
+    ruy_lopez:       {weight: 100, line: "e2e4 e7e5 g1f3 b8c6 f1b5", budget: 600}    # incl. anti-Berlin d3 lines
+    rossolimo:       {weight: 100, line: "e2e4 c7c5 g1f3 b8c6 f1b5", budget: 300}
+    moscow:          {weight: 100, line: "e2e4 c7c5 g1f3 d7d6 f1b5", budget: 200}
+    open_sicilian_e6: {weight: 100, line: "e2e4 c7c5 g1f3 e7e6 d2d4", budget: 200}
+    french_tarrasch: {weight: 100, line: "e2e4 e7e6 d2d4 d7d5 b1d2", budget: 200}
+    caro_advance:    {weight: 100, line: "e2e4 c7c6 d2d4 d7d5 e4e5", budget: 200}
+    pirc_classical:  {weight: 100, line: "e2e4 d7d6 d2d4 g8f6 b1c3", budget: 100}
+    e4_other:        {weight: 0, line: "e2e4", budget: 100}
+  black:
+    e5_berlin:       {weight: 100, line: "e2e4 e7e5", budget: 800}                  # 1...e5, Berlin vs the Ruy Lopez
+    nimzo_qgd:       {weight: 100, line: "d2d4 g8f6 c2c4 e7e6", budget: 600}        # Nimzo-Indian / QGD / Queen's Indian
+    d4_other:        {weight: 0, line: "d2d4 g8f6", budget: 200}                    # London, Trompowsky, ...
+    english_e5:      {weight: 100, line: "c2c4 e7e5", budget: 250}
+    nf3_d5:          {weight: 100, line: "g1f3 d7d5", budget: 200}
+    sicilian:        {weight: 0, line: "e2e4 c7c5", budget: 60}
+  book:
+    enabled: true
+    path: book-carlsen.json   # Carlsen's own openings from his 15k games (repertoire book from 2400+ games: book-carlsen-rep.json)
+    pick: top                 # always his most played move: 1.e4, Sicilian vs 1.e4, 1...Nf6 vs 1.d4 (one consistent repertoire)
+    min_games: 3              # only moves he played at least 3 times, then Maia takes over

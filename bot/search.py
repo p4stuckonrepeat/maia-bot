@@ -83,9 +83,9 @@ class Search:
         margin = float(scfg.get("margin", 0.10))     # how much worse than the best line is still OK
         ok = [c for c in root if c["value"] >= best - margin]
         temp = max(0.05, float(maia_cfg["temperature"]))
-        if scorer:   # the player's learned style rules choose among the moves the calculation keeps
+        if scorer:   # the player's learned style rules choose among the moves the calculation keeps (list -> logits)
             import math
-            logits = [scorer(board, c) for c in ok]
+            logits = scorer(board, ok)
             mx = max(logits)
             pick = random.choices(ok, weights=[math.exp((l - mx) / temp) for l in logits])[0]
         else:
