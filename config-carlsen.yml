@@ -31,6 +31,8 @@ timing:                # Carlsen's real thinking times, measured from ~7,000 of 
   speed: 1.3           # a bit slower than his real 3+0 times (more natural for a bot). 1.5 = slower, 0.7 = faster
   reference_game_seconds: 180  # the times below are for 3+0; longer games scale up (15+10 is ~3x slower)
   clock_scale_power: 0.8
+  top_factor: 0.85     # measured: Carlsen plays the most natural move fast (median ~1.5 s)...
+  surprise_factor: 1.8 # ...and a less obvious move after about twice as long (median ~3 s)
   book: [0.3, 1.8]     # his opening moves: median 1.0 s
   forced: [0.1, 1.5]   # only one legal move / 95%+ sure: median 0.9 s
   obvious: [0.4, 3.0]  # recaptures and 80%+ sure moves: median 1.3 s

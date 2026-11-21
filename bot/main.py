@@ -23,6 +23,7 @@ def log(msg):
 
 class Bot:
     def __init__(self, settings, api, maia, guard, me, book=None):
+        self.last_top_move = None
         self.settings, self.api, self.maia, self.guard, self.me = settings, api, maia, guard, me
         self.book = book or Book()
         self.search = Search(maia)
@@ -209,13 +210,15 @@ class Bot:
                             board.push_uci(m)
                         if board.turn == color and len(moves) != sent_ply and not board.is_game_over():
                             t0 = time.time()
+                            state = {**state, "_base_ms": base_ms}
                             move, note, opening, top_prob = self.pick_move(gid, board, state, color,
                                                                            opp_rating)
                             mine = "w" if color == chess.WHITE else "b"
                             think = think_seconds(state.get(f"{mine}time"), state.get(f"{mine}inc"),
                                                   len(moves), top_prob, board.legal_moves.count(),
                                                   opening is not None, self.cfg.get("timing", {}),
-                                                  board=board, move=move, base_ms=base_ms)
+                                                  board=board, move=move, base_ms=base_ms,
+                                                  is_top=(None if self.last_top_move is None else move == self.last_top_move))
                             wait = think - (time.time() - t0)
                             if wait > 0:
                                 time.sleep(wait)
@@ -244,6 +247,7 @@ class Bot:
 
     def pick_move(self, gid, board, state, color, opp_rating):
         """Return (move, guard note or None, opening name if from the book, Maia's top probability)."""
+        self.last_top_move = None
         move, opening = self.book.pick(gid, board, color, self.cfg)
         if move:
             return move, None, opening, 1.0
@@ -254,6 +258,16 @@ class Bot:
             ph = phase(board)
             if ph in tbp:
                 mcfg = {**mcfg, "temperature": float(tbp[ph])}
+        tbc = mcfg.get("temperature_by_clock")   # time trouble: [[seconds left, multiplier], ...] for a 3-min game
+        own_ms = state.get("wtime" if color == chess.WHITE else "btime")
+        if tbc and own_ms is not None:
+            ref = float(self.cfg.get("timing", {}).get("reference_game_seconds", 180) or 180)
+            base = (state.get("_base_ms") or ref * 1000) / 1000
+            scale = max(1.0, base / ref)           # longer games: time trouble starts at more seconds
+            for secs, mult in sorted(tbc):
+                if own_ms / 1000 < float(secs) * scale:
+                    mcfg = {**mcfg, "temperature": float(mcfg["temperature"]) * float(mult)}
+                    break
         move, top = None, []
         srch = self.cfg.get("search", {})
         clock = state.get("wtime" if color == chess.WHITE else "btime")
@@ -270,6 +284,7 @@ class Bot:
         if move is None:
             move, top, _ = self.maia.choose(board, mcfg, opp_rating)
         top_prob = max((c["policy"] for c in top), default=0.5)
+        self.last_top_move = max(top, key=lambda c: c["policy"])["move"] if top else None
         mc = self.cfg.get("mcts", {})
         if mc.get("enabled") and calc_note is None and top_prob < float(mc.get("skip_if_prob", 0.85)) and \
                 (clock is None or clock > mc.get("min_clock_seconds", 45) * 1000):
