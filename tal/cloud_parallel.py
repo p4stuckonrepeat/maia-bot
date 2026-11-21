@@ -60,6 +60,20 @@ def main():
         json.dump(out, open("pretrain-info.json", "w"), indent=1)
         upload(TAG, "pretrain-info.json", "pretrain-info.json")   # done signal
         return
+    if mode == "player":    # any player (e.g. Carlsen): fine-tune on PLAYER -> <name>-79m.pt + <name>-info.json in tal-runs
+        name = os.environ["PLAYER_NAME"]
+        out = {"gpu": gpu}
+        try:
+            out.update(run({"PLAYER": os.environ["PLAYER"], "PLAYER_MAX_GAMES": os.environ.get("PLAYER_MAX_GAMES", "0"),
+                            "TAL_EPOCHS": os.environ.get("TAL_EPOCHS", "3"), "TAL_TRAIN_BLOCKS": os.environ.get("TAL_TRAIN_BLOCKS", "8"),
+                            "TAL_LR": os.environ.get("TAL_LR", "5e-6"), "TAL_MINUTES": os.environ.get("TAL_MINUTES", "100"),
+                            "TAL_OUT": f"{name}-79m.pt", "TAL_RESUME": ""}))
+            upload(TAG, f"{name}-79m.pt", f"{name}-79m.pt")
+        except Exception as e:
+            out["error"] = str(e)
+        json.dump(out, open(f"{name}-info.json", "w"), indent=1)
+        upload(TAG, f"{name}-info.json", f"{name}-info.json")   # done signal
+        return
     if mode == "young":     # young, wild Tal (1949-1962): continue from the current Tal model
         out = {"gpu": gpu}
         try:

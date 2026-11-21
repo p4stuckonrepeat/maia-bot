@@ -1,0 +1,70 @@
+name: "Player style training on RunPod (paid GPU, fast)"
+on:
+  workflow_dispatch:
+    inputs:
+      player:
+        description: "Games to train on (same format as Kaggle training)"
+        default: "multi:group:Carlsen+chesscom:magnuscarlsen:blitz,rapid+lichess:DrNykterstein:blitz,rapid"
+      name:
+        description: "Model name (file <name>-79m.pt, release <name>-model)"
+        default: "carlsen"
+      epochs:
+        default: "3"
+      minutes:
+        description: "Training time on the GPU"
+        default: "100"
+      train_blocks:
+        description: "How many top blocks to train (2 = gentle, 8 = more of the network)"
+        default: "8"
+      lr:
+        default: "5e-6"
+      max_minutes:
+        description: "Hard limit: the GPU is shut down after this many minutes no matter what"
+        default: "150"
+permissions:
+  contents: write
+concurrency: runpod-player
+env:
+  RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+  GH_TOKEN: ${{ github.token }}
+  GH_REPO: ${{ github.repository }}
+  BRANCH: ${{ github.ref_name }}
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check key
+        run: if [ -z "$RUNPOD_API_KEY" ]; then echo "::error::Secret RUNPOD_API_KEY missing"; exit 1; fi
+      - run: echo "STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+      - name: Start GPU
+        run: |
+          echo "POD=$(python3 tools/runpod.py start ${{ inputs.name }} PLAN_MODE=player PLAYER_NAME=${{ inputs.name }} \
+            "PLAYER=${{ inputs.player }}" TAL_EPOCHS=${{ inputs.epochs }} TAL_MINUTES=${{ inputs.minutes }} \
+            TAL_TRAIN_BLOCKS=${{ inputs.train_blocks }} TAL_LR=${{ inputs.lr }})" >> "$GITHUB_ENV"
+      - name: Wait
+        run: python3 tools/runpod.py wait "$POD" tal-runs ${{ inputs.name }}-info.json ${{ inputs.max_minutes }}
+      - name: Shut the GPU down (always)
+        if: always()
+        run: '[ -n "$POD" ] && python3 tools/runpod.py stop "$POD" || echo "no pod"'
+      - name: Results and save (only if better than normal Maia)
+        run: |
+          N="${{ inputs.name }}"
+          gh release download tal-runs -p "$N-info.json" --clobber
+          cat "$N-info.json"
+          python3 - "$N" <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, sys
+          i = json.load(open(f"{sys.argv[1]}-info.json"))
+          if "error" in i:
+              print(f"## Training failed\n```\n{i['error'][-1500:]}\n```"); sys.exit(0)
+          print(f"## Style training: {i.get('player')} on {i.get('gpu')}\n- games {i['games']}, trained moves {i['train_moves']}, "
+                f"epochs {i['epochs']:.2f}, {i['positions_per_s']:.0f} positions/s\n"
+                f"- predicts the player's move on held-out games: **{i['before']:.1%} -> {i['after']:.1%}**")
+          PY
+          cat "$GITHUB_STEP_SUMMARY"
+          python3 -c "import json,sys; i=json.load(open('$N-info.json')); sys.exit(0 if i.get('improved') else 1)" || { echo "Not better than normal Maia - not saved"; exit 0; }
+          gh release download tal-runs -p "$N-79m.pt" --clobber
+          TAG="$N-model"
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "$N style model" --notes "Maia-3 79M fine-tuned on ${{ inputs.player }}"
+          gh release upload "$TAG" "$N-79m.pt" "$N-info.json" --clobber

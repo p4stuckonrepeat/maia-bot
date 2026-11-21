@@ -34,7 +34,9 @@ def rp(method, url, body=None):
 
 
 def start(name, extra):
-    script = ("set -e; ulimit -n 65536 || true; cd /workspace; git clone --depth 1 https://github.com/" + REPO + " repo; cd repo; "
+    branch = os.environ.get("BRANCH", "")
+    script = ("set -e; ulimit -n 65536 || true; cd /workspace; git clone --depth 1 " + (f"-b {branch} " if branch else "") +
+              "https://github.com/" + REPO + " repo; cd repo; "
               "pip install -q chess python-chess huggingface-hub numpy pyyaml requests; "
               "pip install -q git+https://github.com/CSSLab/maia3@1e13597c42d4858b7cfd7cfdae01e297263364b2; "
               "maia3-cache --model maia3-79m; "
