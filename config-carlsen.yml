@@ -77,23 +77,24 @@ session:
   stop_accepting_minutes_before_end: 20
 
 openings:
-  # weight > 0 = preferred (chosen by weight). weight 0 = only used when no preferred
-  # opening fits the game (e.g. after the opponent's first move). Lines: our moves and the
-  # opponent's moves in order; "*" = any common opponent move. Deep lines live in book.json.
+  # Magnus Carlsen's main repertoire: solid, classical, positions he can grind. weight 0 = only as fallback.
+  # Lines: our moves and the opponent's moves in order; "*" = any common opponent move.
   white:
-    ruy_lopez:           {weight: 100, line: "e2e4 e7e5 g1f3 b8c6 f1b5", budget: 1000}
-    italian:             {weight: 0, line: "e2e4 e7e5 g1f3 b8c6 f1c4", budget: 60}
-    queens_gambit:       {weight: 0, line: "d2d4 d7d5 c2c4", budget: 60}
-    london:              {weight: 0, line: "d2d4 * c1f4", budget: 60}
-    english:             {weight: 0, line: "c2c4", budget: 60}
-    kings_indian_attack: {weight: 0, line: "g1f3 * g2g3 * f1g2", budget: 60}
+    ruy_lopez:       {weight: 100, line: "e2e4 e7e5 g1f3 b8c6 f1b5", budget: 600}    # incl. anti-Berlin d3 lines
+    rossolimo:       {weight: 100, line: "e2e4 c7c5 g1f3 b8c6 f1b5", budget: 300}
+    moscow:          {weight: 100, line: "e2e4 c7c5 g1f3 d7d6 f1b5", budget: 200}
+    open_sicilian_e6: {weight: 100, line: "e2e4 c7c5 g1f3 e7e6 d2d4", budget: 200}
+    french_tarrasch: {weight: 100, line: "e2e4 e7e6 d2d4 d7d5 b1d2", budget: 200}
+    caro_advance:    {weight: 100, line: "e2e4 c7c6 d2d4 d7d5 e4e5", budget: 200}
+    pirc_classical:  {weight: 100, line: "e2e4 d7d6 d2d4 g8f6 b1c3", budget: 100}
+    e4_other:        {weight: 0, line: "e2e4", budget: 100}
   black:
-    sicilian:            {weight: 0, line: "e2e4 c7c5", budget: 60}
-    caro_kann:           {weight: 0, line: "e2e4 c7c6", budget: 60}
-    french:              {weight: 0, line: "e2e4 e7e6", budget: 60}
-    e5_and_ruy_lopez:    {weight: 100, line: "e2e4 e7e5", budget: 1000}   # Carlsen's main answer to 1.e4 (Berlin / open Ruy)
-    kings_indian:        {weight: 0, line: "d2d4 g8f6 * g7g6 * f8g7 * d7d6", budget: 60}
-    queens_gambit_declined: {weight: 100, line: "d2d4 d7d5 c2c4 e7e6", budget: 700}   # Carlsen's main answer to 1.d4
+    e5_berlin:       {weight: 100, line: "e2e4 e7e5", budget: 800}                  # 1...e5, Berlin vs the Ruy Lopez
+    nimzo_qgd:       {weight: 100, line: "d2d4 g8f6 c2c4 e7e6", budget: 600}        # Nimzo-Indian / QGD / Queen's Indian
+    d4_other:        {weight: 0, line: "d2d4 g8f6", budget: 200}                    # London, Trompowsky, ...
+    english_e5:      {weight: 100, line: "c2c4 e7e5", budget: 250}
+    nf3_d5:          {weight: 100, line: "g1f3 d7d5", budget: 200}
+    sicilian:        {weight: 0, line: "e2e4 c7c5", budget: 60}
   book:
     enabled: true
-    path: book-carlsen.json  # Carlsen's own openings from his games (Player imitation workflow)
+    path: book-carlsen-rep.json   # Carlsen repertoire built from 2400+ games, Stockfish-checked (his own book: book-carlsen.json)
