@@ -52,6 +52,10 @@ style:                 # consistent playing style (one "person" across games)
 timing:                # human-like thinking time, based only on the move (not on the clock)
   enabled: true
   speed: 1.0           # multiplies all times: 1.5 = slower, 0.7 = faster
+  reference_game_seconds: 180  # v8 (from Magnus v1): times below are for 3+0; longer games scale up (15+10 is ~3x slower)
+  clock_scale_power: 0.8
+  top_factor: 0.85     # v8 (measured on Carlsen's games): instinct moves come faster...
+  surprise_factor: 1.8 # ...unexpected moves (e.g. sacrifices) after about twice as long
   book: [0.2, 0.8]     # seconds (min, max) for prepared opening moves
   forced: [0.1, 0.5]   # only one legal move, or one move Maia is 95%+ sure about
   obvious: [0.2, 1.0]  # recaptures and moves Maia is 80%+ sure about

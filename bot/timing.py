@@ -17,7 +17,7 @@ DEFAULTS = {
 
 
 def think_seconds(clock_ms, inc_ms, ply, top_prob, legal_moves, from_book, cfg, rng=random,
-                  board=None, move=None):
+                  board=None, move=None, base_ms=None, is_top=None):
     if not cfg.get("enabled", True):
         return 0.0
     c = {**DEFAULTS, **cfg}
@@ -46,7 +46,13 @@ def think_seconds(clock_ms, inc_ms, ply, top_prob, legal_moves, from_book, cfg, 
             t = rng.uniform(*c["hard"])
     if follow_up and not from_book:
         t = min(t * 0.5, rng.uniform(*c["follow_up"]) + 0.5)   # continuing with the same piece
+    if is_top is not None and not from_book:   # humans play their first instinct fast, surprising moves after longer thought
+        t *= float(c.get("top_factor", 1.0)) if is_top else float(c.get("surprise_factor", 1.0))
     t *= float(c.get("speed", 1.0)) * rng.lognormvariate(0, 0.25)
+    ref = float(c.get("reference_game_seconds", 0) or 0)   # times above were measured at this game length
+    if ref and base_ms is not None:                         # slower in longer games, like a human
+        game = base_ms / 1000 + 40 * (inc_ms or 0) / 1000
+        t *= min(4.0, max(0.5, game / ref)) ** float(c.get("clock_scale_power", 0.8))
 
     if clock_ms is not None:                       # safety net only: never lose on time
         clock, inc = clock_ms / 1000, (inc_ms or 0) / 1000

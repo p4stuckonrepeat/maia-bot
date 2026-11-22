@@ -23,6 +23,7 @@ def log(msg):
 
 class Bot:
     def __init__(self, settings, api, maia, guard, me, book=None):
+        self.last_top_move = None
         self.settings, self.api, self.maia, self.guard, self.me = settings, api, maia, guard, me
         self.book = book or Book()
         self.search = Search(maia)
@@ -172,6 +173,7 @@ class Bot:
     def play_game(self, gid):
         color, opp, opp_rating, sent_ply, finished = None, "?", None, -1, False
         vetoes, book_moves, last_opening = 0, 0, None
+        base_ms = None
         failures = 0
         log(f"[{gid}] game started")
         try:
@@ -192,6 +194,7 @@ class Bot:
                                 self.api._req("POST", f"/api/bot/game/{gid}/resign")
                                 return
                             state = ev["state"]
+                            base_ms = (ev.get("clock") or {}).get("initial")
                         elif t == "gameState" and color is not None:
                             state = ev
                         else:
@@ -217,7 +220,8 @@ class Bot:
                             think = think_seconds(state.get(f"{mine}time"), state.get(f"{mine}inc"),
                                                   len(moves), top_prob, board.legal_moves.count(),
                                                   opening is not None, self.cfg.get("timing", {}),
-                                                  board=board, move=move)
+                                                  board=board, move=move, base_ms=base_ms,
+                                                  is_top=(None if self.last_top_move is None else move == self.last_top_move))
                             think = self.adjust_think(think, note, state, color)
                             wait = think - (time.time() - t0)
                             if wait > 0:
@@ -330,6 +334,7 @@ class Bot:
 
     def pick_move(self, gid, board, state, color, opp_rating):
         """Return (move, guard note or None, opening name if from the book, Maia's top probability)."""
+        self.last_top_move = None
         move, opening = self.book.pick(gid, board, color, self.cfg)
         if move:
             return move, None, opening, 1.0
@@ -346,6 +351,7 @@ class Bot:
         if move is None:
             move, top, _ = self.maia.choose(board, mcfg, opp_rating)
         top_prob = max((c["policy"] for c in top), default=0.5)
+        self.last_top_move = max(top, key=lambda c: c["policy"])["move"] if top else None   # Maia's instinct move
         mc = self.cfg.get("mcts", {})
         if mc.get("enabled") and calc_note is None and top_prob < float(mc.get("skip_if_prob", 0.85)) and \
                 (clock is None or clock > mc.get("min_clock_seconds", 45) * 1000):
