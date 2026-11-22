@@ -12,7 +12,7 @@ maia:
 search:                # light human-like calculation with Maia's own judgement (no Stockfish)
   enabled: true        # measured on Carlsen's games: 62.5% his exact move vs 61.3% without (depth 1, margin 0.10, 4 candidates)
   candidates: 4        # natural moves considered (Maia's most likely)
-  depth: 1             # 1 = check the opponent's likely replies; 2 = also our answer (slower)
+  depth: 2             # 2 = also checks its own answer to each reply. Measured on Carlsen's games: 62.4% his move (depth 1: 62.5%) = just as human, calculates deeper
   widths: [3, 2]       # replies considered at each level
   margin: 0.10         # moves within 10% expected score of the best line stay eligible
   skip_if_prob: 0.9    # don't calculate when one move is obvious
