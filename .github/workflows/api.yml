@@ -7,6 +7,7 @@ on:
         default: "2"
 permissions:
   contents: read
+  statuses: write
 jobs:
   api:
     runs-on: ubuntu-latest
@@ -46,11 +47,12 @@ jobs:
           echo "=============================================="
           echo "::notice title=API URL::$URL"
           echo "$URL" > api-url.txt
-      - name: Publish URL (readable while the run is still going)
-        uses: actions/upload-artifact@v4
-        with:
-          name: api-url
-          path: api-url.txt
+      - name: Publish URL as a commit status (readable while the run is still going)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api repos/${{ github.repository }}/statuses/${{ github.sha }} -f state=success \
+            -f context=api-url -f description="$(cat api-url.txt)" -f target_url="$(cat api-url.txt)"
       - name: Keep running
         run: |
           sleep $(python -c "print(int(min(float('${{ inputs.hours }}'), 5.5) * 3600))")
