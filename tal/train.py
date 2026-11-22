@@ -106,6 +106,31 @@ def download_group(names):
     return "\n".join(parts)
 
 
+def download_elite(months, cap):
+    """Lichess Elite Database months; keeps games where at least one side has ELITE_MIN_ELO; tagged [Source "elite"]."""
+    import zipfile
+    from tools.elite_index import month_urls
+    min_elo = int(os.environ.get("ELITE_MIN_ELO", "2550"))
+    out, n = [], 0
+    for url in reversed(month_urls(months)):
+        z = zipfile.ZipFile(io.BytesIO(requests.get(url, headers=UA, timeout=900).content))
+        text = z.read(z.namelist()[0]).decode("utf-8", "replace")
+        for g in re.split(r"\n(?=\[Event )", "\n" + text.replace("\r", "")):
+            if not g.strip():
+                continue
+            elos = [int(x) for x in re.findall(r'\[(?:White|Black)Elo "(\d+)"\]', g)]
+            if not elos or max(elos) < min_elo:
+                continue
+            out.append(g.replace("[Event ", '[Source "elite"]\n[Event ', 1))
+            n += 1
+            if n >= cap:
+                break
+        log(f"elite {url.rsplit('/', 1)[-1]}: {n} games so far")
+        if n >= cap:
+            break
+    return "\n\n".join(out)
+
+
 def multi_sources():
     return PLAYER.split(":", 1)[1].split("+") if PLAYER.startswith("multi:") else []
 
@@ -125,6 +150,9 @@ def download_games(spec=None):
             except Exception as e:
                 log(f"source failed {src}: {e}")
         return "\n\n".join(p for p in parts if p)
+    if spec.startswith("elite:"):      # elite:<months>:<max games>  strong Lichess games (2400+ vs 2200+)
+        _, months, cap = spec.split(":")
+        return download_elite(int(months), int(cap))
     if spec.startswith("group:"):
         return download_group(spec.split(":", 1)[1].split(","))
     if spec.startswith("chesscom:"):
@@ -177,6 +205,14 @@ def tal_games(text):
                 games.append({"moves": moves, "tal": c, "result": g.headers.get("Result", "*"), "player": who})
             if MAX_GAMES and len(games) >= MAX_GAMES:
                 break
+            continue
+        if g.headers.get("Source") == "elite" and not g.headers.get("Variant") and g.headers.get("SetUp") != "1":
+            min_elo = int(os.environ.get("ELITE_MIN_ELO", "2550"))
+            moves = [m.uci() for m in g.mainline_moves()]
+            if len(moves) >= 10:
+                for c, tag in ((chess.WHITE, "WhiteElo"), (chess.BLACK, "BlackElo")):
+                    if g.headers.get(tag, "0").isdigit() and int(g.headers[tag]) >= min_elo:
+                        games.append({"moves": moves, "tal": c, "result": g.headers.get("Result", "*"), "player": "elite"})
             continue
         if PLAYER.startswith("multi:"):
             is_w, is_b = is_player(w), is_player(b)

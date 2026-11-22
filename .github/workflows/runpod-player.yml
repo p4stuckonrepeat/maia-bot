@@ -24,6 +24,9 @@ on:
       tune_only:
         description: "tune mode: temperature | human | all"
         default: "human"
+      min_balance:
+        description: "Only start if RunPod has at least this much prepaid credit ($)"
+        default: "10"
       max_minutes:
         description: "Hard limit: the GPU is shut down after this many minutes no matter what"
         default: "150"
@@ -66,6 +69,8 @@ jobs:
           pip install -q chess requests
           PLAYER="${{ inputs.player }}" python tools/fetch_games.py "${{ inputs.name }}-games.pgn.gz"
           gh release upload tal-runs "${{ inputs.name }}-games.pgn.gz" --clobber
+      - name: Enough RunPod credit?
+        run: python3 tools/runpod.py balance ${{ inputs.min_balance }}
       - run: echo "STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
       - name: Start GPU
         run: |
@@ -114,6 +119,8 @@ jobs:
           pip install -q chess requests
           PLAYER="${{ inputs.player }}" python tools/fetch_games.py "${{ inputs.name }}-games.pgn.gz"
           gh release upload tal-runs "${{ inputs.name }}-games.pgn.gz" --clobber
+      - name: Enough RunPod credit?
+        run: python3 tools/runpod.py balance ${{ inputs.min_balance }}
       - run: echo "STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
       - name: Start GPU
         run: |
@@ -154,6 +161,8 @@ jobs:
           pip install -q chess requests
           PLAYER="${{ inputs.player }}" python tools/fetch_games.py "${{ inputs.name }}-games.pgn.gz"
           gh release upload tal-runs "${{ inputs.name }}-games.pgn.gz" --clobber
+      - name: Enough RunPod credit?
+        run: python3 tools/runpod.py balance ${{ inputs.min_balance }}
       - run: echo "STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
       - name: Start GPU
         run: |

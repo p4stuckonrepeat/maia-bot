@@ -10,7 +10,7 @@ on:
         default: "2500"
       profile:
         type: choice
-        options: [normal, tal, hikaru, carlsen]
+        options: [normal, tal, hikaru, carlsen, carlsen-elite]
         default: normal
 jobs:
   match:

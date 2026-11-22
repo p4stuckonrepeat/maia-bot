@@ -92,6 +92,14 @@ def stop(pod):
 
 if __name__ == "__main__":
     cmd = sys.argv[1]
+    if cmd == "balance":     # prepaid credit left; exits with an error below the minimum
+        st, r = call("POST", "https://api.runpod.io/graphql?api_key=" + KEY, {"query": "query { myself { clientBalance } }"})
+        bal = float(r["data"]["myself"]["clientBalance"]) if st == 200 and isinstance(r, dict) else None
+        print(f"RunPod balance: {bal}")
+        need = float(sys.argv[2]) if len(sys.argv) > 2 else 0
+        if bal is None or bal < need:
+            sys.exit(f"Not enough RunPod credit (need ${need}, have {bal})")
+        sys.exit(0)
     if cmd == "start":
         start(sys.argv[2], dict(a.split("=", 1) for a in sys.argv[3:]))
     elif cmd == "wait":

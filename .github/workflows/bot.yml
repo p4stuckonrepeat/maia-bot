@@ -13,7 +13,7 @@ on:
       profile:
         description: "normal = Maia + book + rules, tal = play like Mikhail Tal"
         type: choice
-        options: [normal, tal, hikaru, carlsen, magnus-v2]
+        options: [normal, tal, hikaru, carlsen, magnus-v2, carlsen-elite]
         default: normal
 concurrency:
   group: lichess-bot-${{ inputs.mode }}
