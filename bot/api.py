@@ -1,7 +1,8 @@
 """HTTP API: Tal v8 analysis for a Safari/userscript.
 
-Uses the bot's own move selection (Bot.pick_move) with Stockfish-dependent features disabled.
-Falls back to pure Maia if pick_move raises.
+Uses the bot's own move selection, then the Tal rules with Stockfish off
+(Maia's own feel only): attack, complications, sacrifices, still sampled
+like a person. No engine moves.
 
 Start (from the repo root):  uvicorn bot.api:app --host 0.0.0.0 --port 8000
 Call:  GET /analyze?fen=<url-encoded FEN>      optional: &n=5
@@ -17,7 +18,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from bot.book import Book
-from bot.engine import Maia
+from bot.engine import Guard, Maia
 from bot.main import Bot
 from bot.search import expected
 from bot.settings import Settings
@@ -28,13 +29,14 @@ STATUS = "Tal v8"
 settings = Settings(CONFIG)
 cfg = settings.cfg
 
-# Force pure Tal path for the API (no Stockfish)
+# This runner has no Stockfish. Tal rules still run, on Maia's own judgement.
 cfg.setdefault("guard", {})["enabled"] = False
 cfg.setdefault("assist", {})["enabled"] = False
-cfg.setdefault("tal_rules2", {})["enabled"] = False
 cfg.setdefault("brilliant", {})["enabled"] = False
 cfg.setdefault("search", {})["enabled"] = False
 cfg.setdefault("mcts", {})["enabled"] = False
+cfg.setdefault("tal_rules2", {})["enabled"] = True
+cfg["tal_rules2"]["no_stockfish"] = True
 
 assert cfg["maia"]["checkpoint"] == "tal-79m.pt", "wrong model"
 assert cfg["style"]["rules_file"] == "tal/tal-rules.json", "wrong style rules"
@@ -43,6 +45,7 @@ assert cfg["openings"]["book"]["path"] == "book-tal-sharp.json", "wrong opening 
 maia = Maia(cfg["maia"]["model"], cfg["maia"]["checkpoint"])
 book = Book(cfg["openings"]["book"]["path"])
 bot = Bot(settings, api=None, maia=maia, guard=None, me="api", book=book)
+_rules = object.__new__(Guard)  # tal_rules cache only; does not start Stockfish
 lock = threading.Lock()
 
 app = FastAPI(title="Maia bot API")
@@ -64,6 +67,22 @@ def move_eval(board, c):
     return fmt(c.get("value", expected(c["wdl"])), board.turn == chess.WHITE)
 
 
+def tal_feel(board, move):
+    """Re-pick among Maia's natural moves with the Tal rules. No Stockfish."""
+    rcfg = dict(cfg.get("tal_rules2", {}))
+    rcfg["enabled"] = True
+    rcfg["no_stockfish"] = True
+    cands = maia.choose(board, cfg["maia"], candidates=int(rcfg.get("candidates", 10)))[1]
+    sf = cfg.get("search_filter", {})
+    if sf.get("enabled") and len(cands) >= 3:
+        cands, _ = bot.feel_filter(board, cands, sf)
+    bot.last_top = cands
+    if len(cands) < 2:
+        return move
+    move2, _ = _rules.tal_rules(board, cands, rcfg)
+    return move2 or move
+
+
 @app.get("/analyze")
 def analyze(fen: str = Query(...), n: int = Query(5, ge=1, le=12), key: str = ""):
     if os.environ.get("API_KEY") and key != os.environ["API_KEY"]:
@@ -80,9 +99,10 @@ def analyze(fen: str = Query(...), n: int = Query(5, ge=1, le=12), key: str = ""
     with lock:
         try:
             move, _, opening, _ = bot.pick_move(gid, board, {}, board.turn, None)
+            if not opening and move is not None:
+                move = tal_feel(board, move)
         except Exception:
             traceback.print_exc()
-            # fallback: pure Maia
             try:
                 move, top = maia.choose(board, cfg["maia"], candidates=n)
                 bot.last_top = top
