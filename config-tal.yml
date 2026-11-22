@@ -79,7 +79,7 @@ assist:                # quality filter: only between Maia's own natural candida
   brilliant_margin_cp: 40  # "nearly best" = at most 0.4 pawns below the best natural candidate
 
 search_filter:         # v8 (from Magnus v1): Maia's own feel drops candidates that lose quickly, before the Tal rules choose
-  enabled: false       # decided by the measurement on Tal's games (tal/tune_tal.py)
+  enabled: true        # measured on Tal's games: Tal's real move 47.2% vs 46.5% without, sacrifices kept (6.1% vs 5.0%)
   margin: 0.10         # keep moves within 10% expected score of the best
   keep_sacrifices: true  # sacrifices always stay eligible (Tal show)
   min_clock_seconds: 30
@@ -88,7 +88,7 @@ tal_rules2:            # rules fitted on 46,000 Tal positions: Tal model + Stock
   enabled: true        # (Tal was much more accurate than the model: 17 vs 29 cp average loss)
   file: tal/tal-rules2.json
   candidates: 10       # only Maia's 10 most natural moves are considered (stays human)
-  temperature: 0.5     # sampling between Tal-scored moves (lower = closer to Tal)
+  temperature: 1.1     # v8, measured on 497 held-out Tal positions: 1.1 matches the spread of Tal's real choices (0.5 was far too predictable; log-loss 1.37 vs 1.86)
   tal_traits_boost: 3.0  # Tal show: Tal traits (attack, no trades, complications, sacrifices) count 3x
   depth: 12
   stockfish_weight: 0.08  # Stockfish barely counts: fewer engine top moves, Tal style decides (rapid)
