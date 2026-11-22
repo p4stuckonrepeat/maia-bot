@@ -31,17 +31,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release download carlsen-model -p carlsen-79m.pt
-      - name: Run API + public tunnel
+      - name: Start API + public tunnel
         env:
           API_KEY: ${{ secrets.API_KEY }}
         run: |
-          uvicorn bot.api:app --host 127.0.0.1 --port 8000 &
+          nohup uvicorn bot.api:app --host 127.0.0.1 --port 8000 > api.log 2>&1 &
           until curl -s localhost:8000/ >/dev/null; do sleep 2; done
-          ./cloudflared tunnel --url http://localhost:8000 2> tunnel.log &
+          nohup ./cloudflared tunnel --url http://localhost:8000 2> tunnel.log &
           until grep -qo 'https://[a-z0-9-]*\.trycloudflare\.com' tunnel.log; do sleep 1; done
           URL=$(grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' tunnel.log | head -1)
           echo "=============================================="
           echo "API URL: $URL"
           echo "Test:    $URL/analyze?fen=rnbqkbnr%2Fpppppppp%2F8%2F8%2F8%2F8%2FPPPPPPPP%2FRNBQKBNR%20w%20KQkq%20-%200%201"
           echo "=============================================="
+          echo "::notice title=API URL::$URL"
+      - name: Keep running
+        run: |
           sleep $(python -c "print(int(min(float('${{ inputs.hours }}'), 5.5) * 3600))")
