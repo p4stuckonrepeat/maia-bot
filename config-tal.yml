@@ -46,8 +46,8 @@ style:                 # consistent playing style (one "person" across games)
   min_relative_prob: 0.25 # rules may pick moves at least a quarter as likely as Maia's top choice
   plans:               # classic theory between natural moves: free the worst piece, pawn breaks, go for the king
     enabled: true
-    strength: 1.5      # 0 = off, 1 = a clear nudge, 2 = strong (Tal show: pawn breaks, pieces to the king)
-    min_relative_prob: 0.25  # only moves at least a quarter as likely as Maia's top choice
+    strength: 2.4      # sharper: pawn breaks and pieces toward the king, still only between natural moves
+    min_relative_prob: 0.12  # a less obvious but still human move can carry the plan
 
 timing:                # human-like thinking time, based only on the move (not on the clock)
   enabled: true
@@ -80,7 +80,7 @@ assist:                # quality filter: only between Maia's own natural candida
 
 search_filter:         # v8 (from Magnus v1): Maia's own feel drops candidates that lose quickly, before the Tal rules choose
   enabled: true        # measured on Tal's games: Tal's real move 47.2% vs 46.5% without, sacrifices kept (6.1% vs 5.0%)
-  margin: 0.10         # keep moves within 10% expected score of the best
+  margin: 0.16         # keep more messy candidates; obvious losers still go
   keep_sacrifices: true  # sacrifices always stay eligible (Tal show)
   min_clock_seconds: 30
 
@@ -89,7 +89,7 @@ tal_rules2:            # rules fitted on 46,000 Tal positions: Tal model + Stock
   file: tal/tal-rules2.json
   candidates: 10       # only Maia's 10 most natural moves are considered (stays human)
   temperature: 1.1     # v8, measured on 497 held-out Tal positions: 1.1 matches the spread of Tal's real choices (0.5 was far too predictable; log-loss 1.37 vs 1.86)
-  tal_traits_boost: 3.0  # Tal show: Tal traits (attack, no trades, complications, sacrifices) count 3x
+  tal_traits_boost: 4.5  # attack, no trades, complications, sacrifices weigh more; sampling stays
   depth: 12
   stockfish_weight: 0.08  # Stockfish barely counts: fewer engine top moves, Tal style decides (rapid)
   lapse_chance: 0.15   # base: 15% of moves without Stockfish's precision (moments of inattention)
@@ -110,16 +110,16 @@ tal_rules2:            # rules fitted on 46,000 Tal positions: Tal model + Stock
   min_clock_seconds: 60  # under 1 minute left: plays on instinct only (more time-pressure mistakes)
   complicate_when_worse:   # Tal's practical chances: when worse, make it messy instead of defending passively
     enabled: true
-    below_cp: 200        # Tal show: seek complications unless clearly winning (+2.0 or more)
-    stockfish_factor: 0.6  # Stockfish's verdict counts less then (accepts slightly weaker but trickier moves)
-    max_extra_loss_cp: 150 # but the bonus only goes to moves at most 1.5 pawns below the best natural move
+    below_cp: 300        # complicate unless Maia already sees a clear win
+    stockfish_factor: 0.5  # accept a slightly worse move when it makes a mess
+    max_extra_loss_cp: 180 # bonus only for moves within 1.8 pawns of the best natural move
     bonus:
-      complexity: 1.0    # positions with many captures / tension
-      threat: 0.8        # moves that create threats
-      forcing: 0.6       # checks, captures, threats
-      sacrifice: 0.8
-      even_trade: -1.0   # avoid simple trades
-      queen_trade: -1.6  # keep the queens on
+      complexity: 1.6
+      threat: 1.3
+      forcing: 1.0
+      sacrifice: 1.6
+      even_trade: -1.5   # avoid simple trades
+      queen_trade: -2.4  # keep the queens on
 
 brilliant:             # Tal mode: always go for sacrifices that keep the position at least equal
   enabled: true
@@ -131,11 +131,11 @@ brilliant:             # Tal mode: always go for sacrifices that keep the positi
   prefer_within_cp: 50 # prefer sacrifices within 0.5 pawns of the best move (that's what chess.com marks brilliant)
   depth: 10           # a bit shallower so checking 30 moves stays fast
   speculative: true    # also Tal's speculative sacrifices: objectively a bit worse, but they create an attack
-  spec_min_eval_cp: -250   # Tal mode: position after a speculative sacrifice may be up to -2.5
-  spec_chance: 1.0     # Tal takes over: always go for a speculative sacrifice when one is there
-  max_cost_cp: 300     # Tal mode: a sacrifice may cost up to 3 pawns compared with the best natural move
-  sound_max_cost_cp: 150 # "about equal" sacrifices count as sound only if they cost at most 1.5 pawns vs the best move
-  spec_free_cost_cp: 150 # speculative sacrifices costing at most 1.5 pawns are allowed even without a direct king attack
+  spec_min_eval_cp: -350   # speculative sacrifices may leave him up to -3.5
+  spec_chance: 1.0     # when the opponent is neither shaky nor precise, still take it
+  max_cost_cp: 400     # a sacrifice may cost up to 4 pawns vs the best natural move
+  sound_max_cost_cp: 180
+  spec_free_cost_cp: 220 # a speculative sac within 2.2 pawns needs no immediate king attack
   tal_motifs: true     # speculative sacrifices also allowed when they are a favourite motif
   motifs_file: tal/brilliant-motifs.json  # Tal + 21 attacking players (Morphy, Keres, Nezhmetdinov, Spielmann, ...)
   max_eval_cp: 1500    # brilliants also when already winning (chess.com marks those too)
@@ -168,17 +168,17 @@ adapt:                 # v6: reads the opponent from their moves only (never the
   shaky_above: 0.05    # their moves lose 5%+ winning chances on average (Maia's judgement): shaky
   precise_below: 0.015 # under 1.5%: very precise
   low_clock_seconds: 60  # opponent under 1 minute: treat as shaky (make it messy)
-  shaky:               # against a shaky opponent: Tal goes for it
+  shaky:               # against a shaky opponent: go for the throat, but not every single time
     tal_rules2:
-      tal_traits_boost: 2.5
-      complicate_when_worse: {below_cp: 300}
+      tal_traits_boost: 5.0
+      complicate_when_worse: {below_cp: 450}
     brilliant:
-      spec_chance: 0.6
-  precise:             # against a precise opponent: still Tal, only slightly more careful
+      spec_chance: 0.85
+  precise:             # still Tal against a precise opponent; only a little more careful than the base
     tal_rules2:
-      tal_traits_boost: 1.8
+      tal_traits_boost: 3.2
     brilliant:
-      spec_chance: 0.35
+      spec_chance: 0.65
 
 
 guard:                 # Stockfish blunder guard. Maia still chooses every move.
@@ -243,4 +243,3 @@ matchmaking:           # when idle, challenge other Lichess bots (to measure the
   max_rating: 2700
   idle_seconds: 60
   exclude: []
-
