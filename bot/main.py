@@ -248,6 +248,7 @@ class Bot:
     def pick_move(self, gid, board, state, color, opp_rating):
         """Return (move, guard note or None, opening name if from the book, Maia's top probability)."""
         self.last_top_move = None
+        self.last_top = []      # candidates behind the last choice (read by the HTTP API)
         move, opening = self.book.pick(gid, board, color, self.cfg)
         if move:
             return move, None, opening, 1.0
@@ -307,6 +308,7 @@ class Bot:
             if len(top) < 2:
                 top = self.maia.choose(board, mcfg, opp_rating, candidates=8)[1]
             move, calc_note = self.mcts.think(board, move, top, mc, int(mcfg["elo"]), opp, budget)
+        self.last_top = top
         low_clock = clock is not None and clock < gcfg.get("min_clock_seconds", 15) * 1000
         if self.guard is None or low_clock:
             return move, calc_note, None, top_prob

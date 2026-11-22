@@ -1,0 +1,47 @@
+name: Analysis API (Magnus v1)
+on:
+  workflow_dispatch:
+    inputs:
+      hours:
+        description: "How long the API stays up (max 5.5)"
+        default: "2"
+permissions:
+  contents: read
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: maia3-79m
+      - name: Install (no Stockfish)
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt git+https://github.com/CSSLab/maia3@1e13597c42d4858b7cfd7cfdae01e297263364b2
+          maia3-cache --model maia3-79m
+          curl -sL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
+          chmod +x cloudflared
+      - name: Get Carlsen model
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download carlsen-model -p carlsen-79m.pt
+      - name: Run API + public tunnel
+        env:
+          API_KEY: ${{ secrets.API_KEY }}
+        run: |
+          uvicorn bot.api:app --host 127.0.0.1 --port 8000 &
+          until curl -s localhost:8000/ >/dev/null; do sleep 2; done
+          ./cloudflared tunnel --url http://localhost:8000 2> tunnel.log &
+          until grep -qo 'https://[a-z0-9-]*\.trycloudflare\.com' tunnel.log; do sleep 1; done
+          URL=$(grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' tunnel.log | head -1)
+          echo "=============================================="
+          echo "API URL: $URL"
+          echo "Test:    $URL/analyze?fen=rnbqkbnr%2Fpppppppp%2F8%2F8%2F8%2F8%2FPPPPPPPP%2FRNBQKBNR%20w%20KQkq%20-%200%201"
+          echo "=============================================="
+          sleep $(python -c "print(int(min(float('${{ inputs.hours }}'), 5.5) * 3600))")
