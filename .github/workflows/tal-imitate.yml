@@ -2,6 +2,9 @@ name: "Player imitation: learn rules + book, measure closeness"
 on:
   workflow_dispatch:
     inputs:
+      task:
+        description: "imitate = learn rules + book | tune = Tal v8 measurements (temperature, feel-based search), CPU only"
+        default: "imitate"
       player:
         description: "tal | chesscom:<user>:<classes>"
         default: "tal"
@@ -35,11 +38,25 @@ jobs:
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements.txt git+https://github.com/CSSLab/maia3@1e13597c42d4858b7cfd7cfdae01e297263364b2
           maia3-cache --model maia3-79m
+      - name: Tal v8 measurements (CPU)
+        if: ${{ inputs.task == 'tune' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PLAYER: tal
+          TAL_CKPT: tal-79m.pt
+          TUNE_POSITIONS: ${{ inputs.eval_positions }}
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q stockfish
+          gh release download tal-live-v1 -p tal-79m.pt
+          python -u -m tal.tune_tal
+          cat tal-tune.json >> "$GITHUB_STEP_SUMMARY"
       - name: Get Tal model
+        if: ${{ inputs.task != 'tune' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release download "${{ inputs.name }}-model" -p "${{ inputs.name }}-79m.pt" -D prev
       - name: Learn and measure
+        if: ${{ inputs.task != 'tune' }}
         env:
           IMIT_TRAIN_POSITIONS: ${{ inputs.train_positions }}
           IMIT_EVAL_POSITIONS: ${{ inputs.eval_positions }}
@@ -49,6 +66,7 @@ jobs:
           TAL_CKPT: prev/${{ inputs.name }}-79m.pt
         run: python -u -m tal.imitate
       - name: Save rules and Tal book to the repo
+        if: ${{ inputs.task != 'tune' }}
         run: |
           N="${{ inputs.name }}"
           cp tal/$N-rules.json /tmp/ && cp book-$N.json /tmp/
