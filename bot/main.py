@@ -384,6 +384,12 @@ class Bot:
             random.random() < float(rcfg.get("lapse_chance", 0))   # a moment of human inattention
         if rcfg.get("enabled") and not lapse and (clock is None or clock > rcfg.get("min_clock_seconds", 40) * 1000):
             cands = self.maia.choose(board, mcfg, opp_rating, candidates=int(rcfg.get("candidates", 10)))[1]
+            sf_cfg = self.cfg.get("search_filter", {})
+            if sf_cfg.get("enabled") and len(cands) >= 3 and \
+                    (clock is None or clock > sf_cfg.get("min_clock_seconds", 30) * 1000):
+                cands, n = self.feel_filter(board, cands, sf_cfg)   # v8: Maia's own feel drops quick losers
+                if n:
+                    notes.append(n)
             if len(cands) >= 2:
                 natural = move
                 move, _ = self.guard.tal_rules(board, cands, rcfg)
@@ -442,6 +448,31 @@ class Bot:
             if n:
                 notes.append(n)
         return move, ("; ".join(notes) or None), None, top_prob
+
+    def feel_filter(self, board, cands, fcfg):
+        """Drop candidates that Maia's own judgement (opponent's likely replies) says lose clearly more than
+        the best one. Sacrifices can be kept so the Tal show survives. No Stockfish."""
+        from tal.imitate import FEATURES, features
+        from bot.search import expected
+        elo = int(self.cfg["maia"]["elo"])
+        vals = []
+        for c in cands:
+            board.push(c["move"])
+            vals.append(1.0 if board.is_checkmate() else 1.0 - self.search.value(board, 1, (elo, elo), [3, 2]))
+            board.pop()
+        best, margin = max(vals), float(fcfg.get("margin", 0.10))
+        keep = []
+        for c, v in zip(cands, vals):
+            sac = False
+            if fcfg.get("keep_sacrifices", True):
+                wdl = c.get("wdl", (500, 0, 500))
+                f = dict(zip(FEATURES, features(board, c["move"], c["policy"], (wdl[0] + 0.5 * wdl[1]) / 1000)))
+                sac = f.get("sacrifice", 0) > 0
+            if v >= best - margin or sac:
+                keep.append(c)
+        if len(keep) < 2 or len(keep) == len(cands):
+            return cands, None
+        return keep, f"feel filter: {len(cands) - len(keep)} of {len(cands)} moves dropped"
 
     def _opponent_form(self, gid, board, state, color, mcfg, opp_rating):
         """Reads the opponent from their moves only (never their rating): how much did their last move lose

@@ -78,6 +78,12 @@ assist:                # quality filter: only between Maia's own natural candida
   brilliant_chance: 0.85   # if a natural candidate sacrifices material and Stockfish rates it (nearly) best, play it this often
   brilliant_margin_cp: 40  # "nearly best" = at most 0.4 pawns below the best natural candidate
 
+search_filter:         # v8 (from Magnus v1): Maia's own feel drops candidates that lose quickly, before the Tal rules choose
+  enabled: false       # decided by the measurement on Tal's games (tal/tune_tal.py)
+  margin: 0.10         # keep moves within 10% expected score of the best
+  keep_sacrifices: true  # sacrifices always stay eligible (Tal show)
+  min_clock_seconds: 30
+
 tal_rules2:            # rules fitted on 46,000 Tal positions: Tal model + Stockfish's verdict on its natural moves
   enabled: true        # (Tal was much more accurate than the model: 17 vs 29 cp average loss)
   file: tal/tal-rules2.json
