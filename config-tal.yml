@@ -231,7 +231,7 @@ openings:
     kid_vs_nf3:      {weight: 100, line: "g1f3 g8f6 * g7g6 * f8g7", budget: 200}
   book:
     enabled: true
-    path: book-tal-sharp.json   # attacking repertoire built from 2400+ games (Tal's own book: book-tal.json)
+    path: book-tal.json         # Tal's own games, not the 2400+ sharp book
 
 matchmaking:           # when idle, challenge other Lichess bots (to measure the real rating)
   enabled: false
