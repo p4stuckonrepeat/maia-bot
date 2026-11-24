@@ -37,17 +37,25 @@ jobs:
           API_KEY: ${{ secrets.API_KEY }}
         run: |
           nohup uvicorn bot.api:app --host 127.0.0.1 --port 8000 > api.log 2>&1 &
-          for i in $(seq 1 60); do
-            curl -sf localhost:8000/ >/dev/null && break
+          for i in $(seq 1 90); do
+            curl -sf --connect-timeout 1 --max-time 2 http://127.0.0.1:8000/ >/dev/null && break
             sleep 2
           done
-          if ! curl -sf localhost:8000/ >/dev/null; then
+          if ! curl -sf --connect-timeout 1 --max-time 2 http://127.0.0.1:8000/ >/dev/null; then
             echo "API did not start"
             cat api.log
             exit 1
           fi
-          nohup ./cloudflared tunnel --url http://localhost:8000 2> tunnel.log &
-          until grep -qo 'https://[a-z0-9-]*\.trycloudflare\.com' tunnel.log; do sleep 1; done
+          nohup ./cloudflared tunnel --url http://127.0.0.1:8000 2> tunnel.log &
+          for i in $(seq 1 40); do
+            grep -qo 'https://[a-z0-9-]*\.trycloudflare\.com' tunnel.log && break
+            sleep 1
+          done
+          if ! grep -qo 'https://[a-z0-9-]*\.trycloudflare\.com' tunnel.log; then
+            echo "tunnel failed"
+            cat tunnel.log
+            exit 1
+          fi
           URL=$(grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' tunnel.log | head -1)
           echo "=============================================="
           echo "API URL: $URL"
