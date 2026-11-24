@@ -9,19 +9,19 @@ maia:
   oppo_elo: 2600       # opponent rating Maia assumes; "opponent" = real rating (plays sloppier vs weak players)
 
 search:                # light human-like calculation with Maia's own judgement (no Stockfish)
-  enabled: true
-  candidates: 6        # natural moves considered (Maia's most likely)
+  enabled: false       # Magnus v1 idea: the deeper look below does the calculating, so this does not replace the Tal move
+  candidates: 4        # natural moves considered (Maia's most likely)
   depth: 1             # 1 = check the opponent's likely replies; 2 = also our answer (slower)
   widths: [3, 2]       # replies considered at each level
   margin: 0.10         # moves within 10% expected score of the best line stay eligible
   skip_if_prob: 0.9    # don't calculate when one move is obvious
   min_clock_seconds: 30
 
-mcts:                  # real calculation, Leela-style, with Maia only (no Stockfish), kept human
-  enabled: false
-  max_seconds: 3       # thinking budget on normal moves (part of the human move time, not extra)
-  hard_seconds: 7      # budget on hard moves (Maia unsure: top move under 35%)
-  hard_below: 0.35
+mcts:                  # Magnus v1 idea: look ahead with Maia only, keep the Tal move unless the line is clearly bad
+  enabled: true
+  max_seconds: 2.5     # thinking budget on normal moves
+  hard_seconds: 6       # longer look when the position is unclear (Tal sits, then plays)
+  hard_below: 0.45
   max_clock_share: 0.04  # never more than 4% of the remaining clock on one move
   max_nodes: 400       # positions looked at, at most
   width: 6             # candidate moves per position (only natural, human moves)
@@ -31,7 +31,7 @@ mcts:                  # real calculation, Leela-style, with Maia only (no Stock
   max_depth: 6         # calculation horizon in plies (3 moves each), like a strong human
   cpuct: 1.5
   sharpness: 0.5       # opponent assumed to answer like a strong human
-  margin: 0.15         # keep the natural (style) move unless the calculation shows a clear mistake (15% expected score)
+  margin: 0.18         # keep the Tal move unless the line is clearly worse: a speculative sac survives, a one-move hang does not
   min_prior: 0.04      # only moves Maia gives 4%+ (or its top 3) can be played: no engine-only moves
   min_visits: 3
   skip_if_prob: 0.85   # don't calculate obvious moves
