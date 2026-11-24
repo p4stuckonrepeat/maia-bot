@@ -4,7 +4,7 @@ maia:
   model: maia3-79m     # (model change needs a restart)
   checkpoint: tal-79m.pt   # Maia-3 79M fine-tuned on Tal's games (downloaded at start)
   elo: 2600            # rating Maia imitates (trained range 600-2600)
-  temperature: 0.45    # lower: commits to the sharpest natural move, games finish sooner
+  temperature: 1.1     # measured on Tal's games: matches how varied his real choices are
   top_p: 1.0           # only sample from the most likely moves covering this probability
   oppo_elo: 2600       # opponent rating Maia assumes; "opponent" = real rating (plays sloppier vs weak players)
 
@@ -31,7 +31,7 @@ mcts:                  # Magnus v1 idea: look ahead with Maia only, keep the Tal
   max_depth: 6         # calculation horizon in plies (3 moves each), like a strong human
   cpuct: 1.5
   sharpness: 0.5       # opponent assumed to answer like a strong human
-  margin: 0.18         # keep the Tal move unless the line is clearly worse: a speculative sac survives, a one-move hang does not
+  margin: 0.25         # keep the Tal move, including a speculative sac, unless the line is clearly lost
   min_prior: 0.04      # only moves Maia gives 4%+ (or its top 3) can be played: no engine-only moves
   min_visits: 3
   skip_if_prob: 0.85   # don't calculate obvious moves
