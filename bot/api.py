@@ -29,8 +29,8 @@ cfg = settings.cfg
 cfg.setdefault("guard", {})["enabled"] = False
 cfg.setdefault("assist", {})["enabled"] = False
 cfg.setdefault("brilliant", {})["enabled"] = False
-cfg.setdefault("search", {})["enabled"] = False
 cfg.setdefault("mcts", {})["enabled"] = False
+# search stays as the profile sets it: one-ply check of the opponent's reply, no Stockfish
 
 assert cfg["maia"]["checkpoint"] == "tal-79m.pt", "wrong model"
 
